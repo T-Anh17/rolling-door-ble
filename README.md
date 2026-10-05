@@ -40,7 +40,7 @@ The remote's frequency still has to be confirmed from the marking on its SAW res
 rolling-door-ble/
 ├── android/                                  Android app (Kotlin, Jetpack Compose)
 ├── firmware_esp/rolling-door-firmware-esp/   ESP32-S3 firmware (PlatformIO, Arduino)
-├── tools/                                    QR code viewer (qr-viewer.html), test helpers
+├── tools/                                    QR code viewer (qr-viewer.html)
 └── docs/                                     Project plan (PLAN.md, in Vietnamese)
 ```
 
@@ -112,8 +112,6 @@ pio run -t upload && pio device monitor
 ```
 
 The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds) and `wipe` (erase all phone keys).
-
-`tools/pair_test.py` plays the app side of the protocol for manual testing with nRF Connect: it builds pairing requests and command frames and decrypts pairing responses. It needs `pip install cryptography` and keeps the keys it receives in `~/.rolling-door-test.json`, outside the repository.
 
 ### Android app
 
