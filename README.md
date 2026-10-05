@@ -41,7 +41,7 @@ rolling-door-ble/
 ├── android/                                  Android app (Kotlin, Jetpack Compose)
 ├── firmware_esp/rolling-door-firmware-esp/   ESP32-S3 firmware (PlatformIO, Arduino)
 ├── tools/                                    QR code viewer (qr-viewer.html)
-└── docs/                                     Project plan (PLAN.md, in Vietnamese)
+└── docs/                                     Early planning notes (Vietnamese)
 ```
 
 ## BLE protocol
@@ -158,8 +158,6 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
 - [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, fit battery and mains detection
 - [ ] **Phase 7 – More phones:** admin UI to add, rename and revoke phones
-
-The full plan (in Vietnamese) is in [`docs/PLAN.md`](docs/PLAN.md), also available as [`docs/ke-hoach-cua-cuon-esp32.docx`](docs/ke-hoach-cua-cuon-esp32.docx).
 
 ## Security notes
 
