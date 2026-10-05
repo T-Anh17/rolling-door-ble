@@ -66,7 +66,28 @@
     <!-- Control -->
     <string name="control_title">Cửa cuốn</string>
     <string name="control_placeholder">Đã ghép đôi với %1$s (ô khóa %2$d). Màn điều khiển sẽ có ở bước tiếp theo.</string>
+    <string name="control_up">Lên</string>
+    <string name="control_down">Xuống</string>
+    <string name="control_lock">Khóa</string>
+    <string name="control_unlock">Mở khóa</string>
+    <string name="control_status_connecting">Đang kết nối…</string>
+    <string name="control_status_ready">Sẵn sàng</string>
+    <string name="control_status_out_of_range">Ngoài vùng</string>
+    <string name="control_status_bluetooth_off">Bluetooth đang tắt</string>
+    <string name="control_status_failed">Không kết nối được</string>
+    <string name="control_retry_now">Thử lại ngay</string>
+    <string name="control_hint_out_of_range">Sẽ tự kết nối khi bạn lại gần cửa.</string>
+    <string name="control_hint_failed">Kiểm tra thiết bị có điện rồi thử lại.</string>
+    <string name="control_hint_unsupported">Firmware trên thiết bị không khớp với app.</string>
+    <string name="control_message_pairing_opened">Đã mở ghép đôi trong 60 giây. Quét mã QR của thiết bị trên điện thoại mới.</string>
+    <string name="control_message_no_reply">Cửa không phản hồi. Xem lại cửa trước khi bấm tiếp.</string>
+    <string name="control_message_key_rejected">Thiết bị không còn nhận điện thoại này. Vào Cài đặt để quên thiết bị rồi ghép đôi lại.</string>
+    <string name="control_message_locked_out">Sai quá nhiều lần. Đợi một phút rồi thử lại.</string>
+    <string name="control_message_rf_failed">Thiết bị không phát được tín hiệu tới cửa.</string>
+    <string name="control_message_not_permitted">Chỉ điện thoại quản trị mới làm được việc này.</string>
+    <string name="control_message_unexpected">Thiết bị trả lời không như mong đợi.</string>
 
     <!-- Settings -->
+    <string name="settings_title">Cài đặt</string>
     <string name="settings_forget">Quên thiết bị</string>
 </resources>

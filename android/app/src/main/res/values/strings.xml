@@ -67,7 +67,28 @@
     <string name="control_title">Rolling door</string>
     <!-- Temporary until the control screen is built. %1$s: MAC address, %2$d: key slot -->
     <string name="control_placeholder">Paired with %1$s (slot %2$d). The control screen comes in the next step.</string>
+    <string name="control_up">Up</string>
+    <string name="control_down">Down</string>
+    <string name="control_lock">Lock</string>
+    <string name="control_unlock">Unlock</string>
+    <string name="control_status_connecting">Connecting…</string>
+    <string name="control_status_ready">Ready</string>
+    <string name="control_status_out_of_range">Out of range</string>
+    <string name="control_status_bluetooth_off">Bluetooth is off</string>
+    <string name="control_status_failed">Cannot connect</string>
+    <string name="control_retry_now">Try now</string>
+    <string name="control_hint_out_of_range">Connects by itself when you are near the door.</string>
+    <string name="control_hint_failed">Check that the device has power, then try again.</string>
+    <string name="control_hint_unsupported">The device firmware does not match this app.</string>
+    <string name="control_message_pairing_opened">Pairing is open for 60 seconds. Scan the device’s QR code on the new phone.</string>
+    <string name="control_message_no_reply">The door did not answer. Check the door before pressing again.</string>
+    <string name="control_message_key_rejected">The device no longer accepts this phone. Forget the device in Settings and pair again.</string>
+    <string name="control_message_locked_out">Too many failed attempts. Wait a minute and try again.</string>
+    <string name="control_message_rf_failed">The device could not send the signal to the door.</string>
+    <string name="control_message_not_permitted">Only the admin phone can do this.</string>
+    <string name="control_message_unexpected">The device answered something unexpected.</string>
 
     <!-- Settings -->
+    <string name="settings_title">Settings</string>
     <string name="settings_forget">Forget device</string>
 </resources>
