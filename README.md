@@ -40,7 +40,7 @@ The remote's frequency still has to be confirmed from the marking on its SAW res
 rolling-door-ble/
 ├── android/                                  Android app (Kotlin, Jetpack Compose)
 ├── firmware_esp/rolling-door-firmware-esp/   ESP32-S3 firmware (PlatformIO, Arduino)
-├── tools/                                    Test helpers (pair_test.py)
+├── tools/                                    QR code viewer (qr-viewer.html), test helpers
 └── docs/                                     Project plan (PLAN.md, in Vietnamese)
 ```
 
@@ -126,6 +126,19 @@ gradlew installDebug
 BLE does not work in the emulator; use a real device.
 
 The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.
+
+### Setting up a new device
+
+Every board makes its own pairing QR code. The source code contains no secrets, so building from this repository never gives you someone else's code, and your code never ends up in the repository.
+
+1. **Flash the firmware** (see [Firmware](#firmware)). On first boot the board creates a random setup secret and stores it in its own flash (NVS).
+2. **Get the QR code** with either of these, while the board is plugged into your computer:
+   - Open [`tools/qr-viewer.html`](tools/qr-viewer.html) in Chrome or Edge, click **Connect** and pick the board. The page reads the code over USB (Web Serial) and shows it large enough to scan, with **Print** and **Save PNG** buttons. It works offline, sends nothing anywhere, and is available in English and Vietnamese. In other browsers, paste the serial output into the box at the bottom of the page.
+   - Or open a serial monitor (`pio device monitor`) and type `qr`. Until a phone is paired, the code is also printed at every boot.
+3. **Keep the code private.** Print it or save the PNG somewhere safe, not on the box by the door. Anyone with it can pair while pairing is open. Do not share your QR code, screenshots of it, or your serial logs when you share the project.
+4. **Pair the first phone** by scanning the code in the app. It becomes the admin. To add more phones later, the admin taps "Add phone" (or you hold BOOT for 3 seconds) and the new phone scans the same code within 60 seconds.
+
+Erasing the phone keys (hold KEY / GPIO14 for 10 seconds) keeps the setup secret, so the printed code stays valid. Only a full flash erase (`pio run -t erase`) creates a new secret and a new code.
 
 ## Branches
 

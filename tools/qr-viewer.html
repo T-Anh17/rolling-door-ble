@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RollingDoor QR Code</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --text: #1b1f24;
+    --muted: #5b6470;
+    --border: #d9dde3;
+    --accent: #1f6feb;
+    --accent-text: #ffffff;
+    --error: #c62828;
+    --ok: #2e7d32;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111418;
+      --surface: #1a1f25;
+      --text: #e6e9ed;
+      --muted: #9aa4b1;
+      --border: #2c333c;
+      --accent: #4c8dff;
+      --accent-text: #0b0d10;
+      --error: #ef6b6b;
+      --ok: #6cc070;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111418;
+    --surface: #1a1f25;
+    --text: #e6e9ed;
+    --muted: #9aa4b1;
+    --border: #2c333c;
+    --accent: #4c8dff;
+    --accent-text: #0b0d10;
+    --error: #ef6b6b;
+    --ok: #6cc070;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  ol { margin: 0 0 16px; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border: 1px solid var(--accent);
+    background: var(--accent);
+    color: var(--accent-text);
+    border-radius: 8px;
+    padding: 10px 18px;
+    cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #status { margin: 12px 0 0; min-height: 1.5em; color: var(--muted); }
+  #status.error { color: var(--error); }
+  #status.ok { color: var(--ok); }
+  #result { display: none; text-align: center; }
+  #result.shown { display: block; }
+  #qr {
+    width: 100%;
+    max-width: 320px;
+    height: auto;
+    image-rendering: pixelated;
+    background: #ffffff;
+    border-radius: 8px;
+  }
+  .device { font-family: ui-monospace, Consolas, monospace; color: var(--muted); margin: 8px 0 16px; }
+  .warning { color: var(--muted); font-size: 0.9rem; margin: 16px 0 0; }
+  details summary { cursor: pointer; font-weight: 600; }
+  textarea {
+    width: 100%;
+    min-height: 140px;
+    margin: 12px 0;
+    font: 12px/1.2 ui-monospace, Consolas, monospace;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .lang { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .lang button {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+    padding: 6px 12px;
+    font-size: 0.875rem;
+  }
+  .lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); }
+  .print-label { display: none; }
+  @media print {
+    body { background: #ffffff; color: #000000; }
+    main > *:not(#result) { display: none !important; }
+    #result { border: none; padding: 0; }
+    #result .row, #result .warning { display: none; }
+    #qr { max-width: 70mm; }
+    .print-label { display: block; font-size: 12pt; margin-top: 4mm; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="header">
+    <h1 data-i18n="title">RollingDoor QR code</h1>
+    <div class="lang" role="group" aria-label="Language">
+      <button data-lang="en" aria-pressed="true">EN</button>
+      <button data-lang="vi" aria-pressed="false">VI</button>
+    </div>
+  </div>
+  <p class="lead" data-i18n="lead">Reads the pairing QR code from your board over USB. Nothing leaves this computer.</p>
+
+  <section class="card">
+    <ol>
+      <li data-i18n="step1">Flash the firmware and plug the board into this computer with a USB cable.</li>
+      <li data-i18n="step2">Close any serial monitor that is using the port.</li>
+      <li data-i18n-html="step3">Click <strong>Connect</strong> and pick the board (USB JTAG/serial debug unit).</li>
+    </ol>
+    <div class="row">
+      <button id="connect" data-i18n="connect">Connect</button>
+    </div>
+    <p id="status" role="status"></p>
+  </section>
+
+  <section class="card" id="result" aria-live="polite">
+    <canvas id="qr" width="1" height="1" data-i18n-label="qrLabel" aria-label="Pairing QR code"></canvas>
+    <p class="device" id="device"></p>
+    <p class="print-label" data-i18n="printLabel">RollingDoor pairing code. Keep it private.</p>
+    <div class="row" style="justify-content: center">
+      <button id="print" data-i18n="print">Print</button>
+      <button id="save" class="secondary" data-i18n="save">Save PNG</button>
+    </div>
+    <p class="warning" data-i18n="warning">Anyone with this code can pair a phone while pairing is open. Keep it somewhere safe, not on the box by the door, and never commit it.</p>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary data-i18n="pasteTitle">No Web Serial? Paste the serial output instead</summary>
+      <p class="lead" style="margin: 8px 0 0" data-i18n-html="pasteHelp">Web Serial works in Chrome and Edge. In other browsers, run <code>pio device monitor</code>, type <code>qr</code>, and paste everything it prints here.</p>
+      <textarea id="paste" spellcheck="false" placeholder="[SETUP] scan this QR code with the app to pair:&#10;...&#10;[SETUP] QR text: RDOOR1:..."></textarea>
+      <button id="render" class="secondary" data-i18n="render">Show QR code</button>
+    </details>
+  </section>
+</main>
+
+<script>
+  const QR_TEXT = /\[SETUP\] QR text: (RDOOR1:[0-9A-F]{12}:[A-Z2-7]+)/;
+  const BLOCK_LINE = /^[█▀▄ ]+$/;
+
+  const statusEl = document.getElementById("status");
+  const resultEl = document.getElementById("result");
+  const canvas = document.getElementById("qr");
+  let lastDevice = "";
+  let lastMac = "";
+
+  const STRINGS = {
+    en: {
+      title: "RollingDoor QR code",
+      lead: "Reads the pairing QR code from your board over USB. Nothing leaves this computer.",
+      step1: "Flash the firmware and plug the board into this computer with a USB cable.",
+      step2: "Close any serial monitor that is using the port.",
+      step3: "Click <strong>Connect</strong> and pick the board (USB JTAG/serial debug unit).",
+      connect: "Connect",
+      qrLabel: "Pairing QR code",
+      printLabel: "RollingDoor pairing code. Keep it private.",
+      print: "Print",
+      save: "Save PNG",
+      warning: "Anyone with this code can pair a phone while pairing is open. Keep it somewhere safe, not on the box by the door, and never commit it.",
+      pasteTitle: "No Web Serial? Paste the serial output instead",
+      pasteHelp: "Web Serial works in Chrome and Edge. In other browsers, run <code>pio device monitor</code>, type <code>qr</code>, and paste everything it prints here.",
+      render: "Show QR code",
+      device: "Device",
+      noWebSerial: "This browser has no Web Serial. Use Chrome or Edge, or paste the serial output below.",
+      noBoard: "No board selected.",
+      asking: "Connected. Asking the board for its QR code…",
+      readBoard: "QR code read from the board.",
+      noQr: "The board did not send a QR code. Check that it runs the rolling-door-ble firmware.",
+      portBusy: "Could not open the port. Close any serial monitor using it and try again.",
+      serialError: "Serial error: ",
+      readPaste: "QR code read from the pasted output.",
+      noQrPaste: "No QR code found in the pasted text. Paste everything from the line “scan this QR code” to “QR text”.",
+    },
+    vi: {
+      title: "Mã QR RollingDoor",
+      lead: "Đọc mã QR ghép đôi từ board qua cổng USB. Không có dữ liệu nào rời khỏi máy tính này.",
+      step1: "Nạp firmware rồi cắm board vào máy tính này bằng cáp USB.",
+      step2: "Đóng mọi Serial monitor đang dùng cổng đó.",
+      step3: "Bấm <strong>Kết nối</strong> rồi chọn board (USB JTAG/serial debug unit).",
+      connect: "Kết nối",
+      qrLabel: "Mã QR ghép đôi",
+      printLabel: "Mã ghép đôi RollingDoor. Hãy giữ bí mật.",
+      print: "In",
+      save: "Lưu PNG",
+      warning: "Ai có mã này đều ghép được điện thoại khi cửa sổ ghép đôi đang mở. Hãy cất ở nơi an toàn, không dán ở hộp mạch ngoài cửa và không bao giờ commit lên git.",
+      pasteTitle: "Không có Web Serial? Dán log Serial vào đây",
+      pasteHelp: "Web Serial chạy trên Chrome và Edge. Với trình duyệt khác, chạy <code>pio device monitor</code>, gõ <code>qr</code> rồi dán toàn bộ nội dung in ra vào đây.",
+      render: "Hiện mã QR",
+      device: "Thiết bị",
+      noWebSerial: "Trình duyệt này không hỗ trợ Web Serial. Hãy dùng Chrome hoặc Edge, hoặc dán log Serial ở bên dưới.",
+      noBoard: "Chưa chọn board.",
+      asking: "Đã kết nối. Đang lấy mã QR từ board…",
+      readBoard: "Đã đọc mã QR từ board.",
+      noQr: "Board không gửi mã QR. Hãy kiểm tra board đang chạy firmware rolling-door-ble.",
+      portBusy: "Không mở được cổng. Hãy đóng Serial monitor đang dùng cổng đó rồi thử lại.",
+      serialError: "Lỗi Serial: ",
+      readPaste: "Đã đọc mã QR từ nội dung vừa dán.",
+      noQrPaste: "Không tìm thấy mã QR trong nội dung đã dán. Hãy dán từ dòng “scan this QR code” đến dòng “QR text”.",
+    },
+  };
+
+  let lang = "en";
+  let status = { key: "", kind: "", extra: "" };
+
+  function t(key) {
+    return STRINGS[lang][key];
+  }
+
+  function setStatus(key, kind, extra) {
+    status = { key, kind: kind || "", extra: extra || "" };
+    statusEl.textContent = key ? t(key) + status.extra : "";
+    statusEl.className = status.kind;
+  }
+
+  function applyLanguage(next) {
+    lang = next;
+    document.documentElement.lang = lang;
+    document.title = t("title");
+    document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-html]").forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+    document.querySelectorAll("[data-i18n-label]").forEach((el) => { el.setAttribute("aria-label", t(el.dataset.i18nLabel)); });
+    document.querySelectorAll("[data-lang]").forEach((el) => { el.setAttribute("aria-pressed", String(el.dataset.lang === lang)); });
+    if (lastMac) document.getElementById("device").textContent = t("device") + " " + lastMac;
+    setStatus(status.key, status.kind, status.extra);
+    try { localStorage.setItem("rollingdoor-qr-lang", lang); } catch {}
+  }
+
+  function initialLanguage() {
+    try {
+      const saved = localStorage.getItem("rollingdoor-qr-lang");
+      if (saved in STRINGS) return saved;
+    } catch {}
+    return (navigator.language || "").toLowerCase().startsWith("vi") ? "vi" : "en";
+  }
+
+  // The firmware prints the QR code with half blocks, two module rows per line, on a light
+  // background: a full block is two light modules, a space is two dark ones.
+  // Returns { text, rows } from the last complete printout in the log, or null.
+  function parseLog(log) {
+    const lines = log.replace(/\r/g, "").split("\n");
+    let textIndex = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (QR_TEXT.test(lines[i])) { textIndex = i; break; }
+    }
+    if (textIndex < 0) return null;
+
+    const grid = [];
+    for (let i = textIndex - 1; i >= 0 && BLOCK_LINE.test(lines[i].trimEnd()); i--) {
+      grid.unshift(lines[i].trimEnd());
+    }
+    if (grid.length < 10) return null;
+
+    const width = Math.max(...grid.map((line) => line.length));
+    const rows = [];
+    for (const line of grid) {
+      const top = [], bottom = [];
+      for (let x = 0; x < width; x++) {
+        const ch = line[x] || "█";
+        top.push(!(ch === "█" || ch === "▀"));
+        bottom.push(!(ch === "█" || ch === "▄"));
+      }
+      rows.push(top, bottom);
+    }
+    return { text: lines[textIndex].match(QR_TEXT)[1], rows };
+  }
+
+  function show(parsed) {
+    const scale = 12;
+    const size = parsed.rows[0].length;
+    canvas.width = size * scale;
+    canvas.height = parsed.rows.length * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000000";
+    parsed.rows.forEach((row, y) => row.forEach((dark, x) => {
+      if (dark) ctx.fillRect(x * scale, y * scale, scale, scale);
+    }));
+
+    const mac = parsed.text.split(":")[1].match(/../g).join(":");
+    lastMac = mac;
+    lastDevice = mac.replace(/:/g, "");
+    document.getElementById("device").textContent = t("device") + " " + mac;
+    resultEl.classList.add("shown");
+    resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  async function readQrFromBoard() {
+    if (!("serial" in navigator)) {
+      setStatus("noWebSerial", "error");
+      return;
+    }
+    let port;
+    try {
+      port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] });
+    } catch {
+      setStatus("noBoard");
+      return;
+    }
+
+    const button = document.getElementById("connect");
+    button.disabled = true;
+    let reader;
+    try {
+      await port.open({ baudRate: 115200 });
+      setStatus("asking");
+      const writer = port.writable.getWriter();
+      const encoder = new TextEncoder();
+      const decoder = new TextDecoder();
+      let log = "";
+      reader = port.readable.getReader();
+
+      // One read stays pending across timeouts so no incoming data is dropped.
+      let pendingRead = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await writer.write(encoder.encode("\nqr\n"));
+        const deadline = Date.now() + 4000;
+        while (Date.now() < deadline) {
+          pendingRead = pendingRead || reader.read();
+          const timeout = new Promise((resolve) => setTimeout(() => resolve({ timedOut: true }), deadline - Date.now()));
+          const chunk = await Promise.race([pendingRead, timeout]);
+          if (chunk.timedOut) break;
+          pendingRead = null;
+          if (chunk.done) break;
+          log += decoder.decode(chunk.value, { stream: true });
+          const parsed = parseLog(log);
+          if (parsed) {
+            writer.releaseLock();
+            show(parsed);
+            setStatus("readBoard", "ok");
+            return;
+          }
+        }
+      }
+      writer.releaseLock();
+      setStatus("noQr", "error");
+    } catch (error) {
+      const busy = error && /open|access|busy/i.test(String(error.message));
+      if (busy) setStatus("portBusy", "error");
+      else setStatus("serialError", "error", error.message);
+    } finally {
+      try { if (reader) { await reader.cancel(); reader.releaseLock(); } } catch {}
+      try { await port.close(); } catch {}
+      button.disabled = false;
+    }
+  }
+
+  document.querySelectorAll("[data-lang]").forEach((el) => {
+    el.addEventListener("click", () => applyLanguage(el.dataset.lang));
+  });
+  applyLanguage(initialLanguage());
+
+  document.getElementById("connect").addEventListener("click", readQrFromBoard);
+  document.getElementById("render").addEventListener("click", () => {
+    const parsed = parseLog(document.getElementById("paste").value);
+    if (parsed) {
+      show(parsed);
+      setStatus("readPaste", "ok");
+    } else {
+      setStatus("noQrPaste", "error");
+    }
+  });
+  document.getElementById("print").addEventListener("click", () => window.print());
+  document.getElementById("save").addEventListener("click", () => {
+    const link = document.createElement("a");
+    link.download = "rollingdoor-qr-" + lastDevice + ".png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  });
+</script>
+</body>
+</html>
