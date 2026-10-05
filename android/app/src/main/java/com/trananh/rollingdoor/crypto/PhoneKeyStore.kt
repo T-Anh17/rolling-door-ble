@@ -20,7 +20,8 @@ interface PhoneKeyStore {
 // Imports the key into Android Keystore as an HMAC-SHA256 key; after that it never leaves Keystore.
 // No StrongBox: it adds tens of milliseconds to every signature.
 class AndroidPhoneKeyStore : PhoneKeyStore {
-    private val keyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
+    // Opened on first use (off the main thread, see DeviceRepository), not at app start.
+    private val keyStore by lazy { KeyStore.getInstance(PROVIDER).apply { load(null) } }
 
     override fun importKey(key: ByteArray) {
         keyStore.setEntry(
