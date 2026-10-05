@@ -1,0 +1,114 @@
+# Hướng dẫn làm việc với repo
+
+Tài liệu này dành cho người (và trợ lý AI) làm việc trên repo. Đọc hết trước khi sửa code. README.md là tài liệu cho người dùng; file này là quy tắc làm việc.
+
+## Dự án
+
+Điều khiển cửa cuốn 433MHz bằng điện thoại Android qua Bluetooth Low Energy.
+
+- ESP32-S3 đặt gần cửa, phát lại mã cố định của remote RF gốc, giống như một remote thứ hai. Không đấu dây vào hộp điều khiển cửa.
+- App Android kết nối BLE, hiện bốn nút như remote: Lên, Xuống, Khóa, Mở khóa. Remote không có nút Dừng: bấm Khóa khi cửa đang chạy thì cửa dừng, phải bấm Mở khóa rồi mới Lên hoặc Xuống được.
+- BLE là kênh điều khiển duy nhất. WiFi mặc định tắt, chỉ bật khi cập nhật firmware (OTA).
+- Mọi lệnh được xác thực bằng khóa riêng của từng điện thoại (HMAC-SHA256) và nonce dùng một lần. Ghép đôi bằng mã QR do từng board tự sinh.
+- Giao thức BLE và cách ghép đôi mô tả đầy đủ trong README.md. Sửa giao thức thì sửa cả firmware, app và README trong cùng một giai đoạn.
+
+## Cấu trúc thư mục
+
+```
+rolling-door-ble/
+├── README.md                                 Tài liệu cho người dùng (tiếng Anh)
+├── USEGUIDE.md                               File này
+├── LICENSE                                   MIT, chỉ áp dụng cho mã nguồn
+├── android/                                  App Android (Kotlin, Jetpack Compose)
+│   └── app/src/main/java/com/trananh/rollingdoor/
+│       ├── ble/                              GATT client, kết nối cửa, quét, phiên ghép đôi
+│       ├── crypto/                           HKDF, ghép đôi ECDH, ký lệnh, Android Keystore
+│       ├── data/                             DeviceRepository (DataStore + PhoneKeyStore)
+│       ├── protocol/                         UUID, khung lệnh, phân tích mã QR
+│       └── ui/                               Theme, components, gate quyền Bluetooth, ghép đôi
+├── firmware_esp/rolling-door-firmware-esp/   Firmware ESP32-S3 (PlatformIO, Arduino)
+│   ├── platformio.ini
+│   └── src/
+│       ├── config.h                          UUID, độ dài khung, chân nút, thời gian
+│       ├── ble_server.*                      GATT server (NimBLE)
+│       ├── auth.*, key_store.*               Kiểm tra HMAC, bảng 8 khóa trong NVS
+│       ├── pairing.*, device_secret.*        Ghép đôi, setup secret và chuỗi QR
+│       ├── protocol.*, buttons.*, console.*  Mã lệnh, nút BOOT/KEY, lệnh serial
+│       └── rf.h, rf_fake.cpp                 Lớp RF (hiện là bản giả, chỉ in log)
+├── tools/qr-viewer.html                      Đọc mã QR từ board qua Web Serial
+└── docs/                                     Ghi chú kế hoạch ban đầu
+```
+
+## Phần cứng
+
+| Linh kiện | Ghi chú |
+|---|---|
+| LilyGO T-Display-S3 | Board ESP32-S3, bỏ màn hình. Nút BOOT = GPIO0, nút KEY = GPIO14 |
+| Bộ MX-433: FS1000A (phát) | Cấp 5V. Phát lại mã của remote. Anten dây 17,3cm |
+| Bộ MX-433: XY-MK-5V (thu) | Cấp 5V. Chỉ dùng khi học mã từ remote. DATA ra mức 5V nên phải qua cầu phân áp 10k/20k trước khi vào GPIO |
+| Adapter 5V USB-C | Nguồn chính |
+| Pin LiPo 3,7V, cổng JST 1,25mm | Nguồn dự phòng, chỉ để báo mất điện |
+| Điện trở 10kΩ và 20kΩ | Cầu phân áp cho DATA mạch thu và cho mạch phát hiện điện lưới |
+
+Chân GPIO cho DATA phát, DATA thu và phát hiện điện lưới chưa chốt; sẽ chọn ở giai đoạn 6 và ghi vào `config.h` cùng README.
+
+## Build trên Windows
+
+Lệnh dưới đây chạy trong PowerShell.
+
+### Firmware
+
+Cần PlatformIO. Nếu cài qua extension VS Code mà `pio` chưa có trong PATH, dùng `$env:USERPROFILE\.platformio\penv\Scripts\pio.exe`.
+
+```powershell
+cd firmware_esp\rolling-door-firmware-esp
+pio run                      # chỉ biên dịch
+pio run -t upload            # biên dịch và nạp
+pio device monitor           # xem log serial, 115200 baud
+pio run -t erase             # xóa toàn bộ flash: sinh setup secret và mã QR mới
+```
+
+### App Android
+
+Cần Android Studio (SDK và JDK). minSdk 26, targetSdk 36. BLE không chạy trên emulator, phải dùng máy thật bật USB debugging.
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug        # build APK debug
+.\gradlew.bat installDebug         # build và cài lên điện thoại đang cắm
+.\gradlew.bat testDebugUnitTest    # chạy unit test
+```
+
+## Cách làm việc
+
+- **Trả lời bằng tiếng Việt.** Code, tên biến, comment và commit message viết bằng tiếng Anh. README.md viết bằng tiếng Anh.
+- **Làm từng giai đoạn.** Chỉ làm giai đoạn đang làm, không làm trước việc của giai đoạn sau. Xong mỗi giai đoạn thì cập nhật mục "Trạng thái" bên dưới và Roadmap trong README.md.
+- **Nêu trước, làm sau.** Trước khi sửa, liệt kê các file sẽ tạo, sửa hoặc xóa kèm lý do ngắn, rồi chờ đồng ý.
+- **Nhánh:** `main` ổn định, `dev` phát triển hằng ngày, `android` cho app, `esp32` cho firmware. Gộp `android`/`esp32` vào `dev`; gộp `dev` vào `main` khi một giai đoạn chạy được, rồi gắn tag.
+- **Ngôn ngữ app:** theo ngôn ngữ điện thoại; tiếng Việt thì dùng `values-vi`, còn lại tiếng Anh.
+
+## Mã nguồn mở
+
+Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
+
+- **Không bao giờ commit** mật khẩu WiFi, mật khẩu OTA, khóa bí mật (setup secret, khóa điện thoại) hay mã RF đã học. Các giá trị này chỉ nhập lúc chạy và lưu trong NVS của ESP hoặc Android Keystore.
+- **Giá trị cần lúc biên dịch** thì đặt trong `secrets.h`. File này nằm trong `.gitignore`; commit kèm một bản mẫu `secrets.example.h` chỉ chứa giá trị giả.
+- **Không đưa vào repo** ảnh chụp bên trong remote hay vị trí DIP switch, vì đó chính là mã của cửa. Không đưa địa chỉ nhà hay ảnh nhận ra được ngôi nhà. Không đưa mã QR thật, ảnh chụp mã QR hay log serial có in mã QR.
+- **Dữ liệu mẫu** trong test và preview phải rõ là giả (ví dụ secret `00 01 02 … 0F`), không lấy từ board thật.
+- **Trước mỗi lần commit**, rà lại toàn bộ phần thay đổi (`git diff --staged`, cả file mới chưa theo dõi) để chắc không có thông tin nhạy cảm, và nói rõ là đã rà.
+
+## Trạng thái các giai đoạn
+
+| Giai đoạn | Nội dung | Trạng thái |
+|---|---|---|
+| 1 | Khung BLE: GATT server trên ESP32, lớp RF giả | Xong |
+| 2 | Ghép đôi bằng QR, bảng khóa, kiểm tra HMAC, quyền admin | Xong |
+| 3 | App Android: ghép đôi, màn hình bốn nút, tự kết nối | Đang làm |
+| 4 | Hoàn thiện: dưới 1 giây từ lúc mở đến sẵn sàng, xử lý mất kết nối, trạng thái nguồn | Chưa |
+| 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
+| 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, lắp pin và mạch phát hiện điện lưới | Chưa |
+| 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Chưa |
+
+Giai đoạn 3, đã xong: giao thức và crypto ghép đôi (có unit test), lưu khóa trong Android Keystore, GATT client và tự kết nối lại, màn hình ghép đôi, máy quét QR offline, gate quyền Bluetooth, design tokens và components, icon app.
+
+Giai đoạn 3, còn lại: màn hình điều khiển (trạng thái và bốn nút, không cuộn), hiện đang là màn hình tạm trong `ui/RootScreen.kt`.
