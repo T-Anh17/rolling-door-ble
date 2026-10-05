@@ -1,5 +1,8 @@
 package com.trananh.rollingdoor.ui.theme
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LocalRippleConfiguration
@@ -10,9 +13,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 
 private val LocalDoorColors = staticCompositionLocalOf { LightDoorColors }
 private val LocalDoorTypography = staticCompositionLocalOf { DoorTypography() }
@@ -45,6 +51,7 @@ fun RollingDoorTheme(
     val widthDp = LocalConfiguration.current.screenWidthDp
     val spacing = remember(widthDp) { DoorSpacing.forScreenWidth(widthDp) }
     val radius = remember { DoorRadius() }
+    SystemBarIcons(darkTheme)
 
     CompositionLocalProvider(
         LocalDoorColors provides colors,
@@ -67,6 +74,37 @@ fun RollingDoorTheme(
             CompositionLocalProvider(LocalRippleConfiguration provides null, content = content)
         }
     }
+}
+
+// Status and navigation bar icons follow the theme the app actually draws, not the system
+// setting that enableEdgeToEdge() reads: light icons on a dark page, dark icons on a light one.
+@Composable
+private fun SystemBarIcons(darkTheme: Boolean) {
+    val view = LocalView.current
+    if (view.isInEditMode) return
+    SideEffect {
+        val window = view.context.findActivity()?.window ?: return@SideEffect
+        WindowCompat.getInsetsController(window, view).apply {
+            isAppearanceLightStatusBars = !darkTheme
+            isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+// Content of sheets and dialogs. Light mode is unchanged.
+@Composable
+fun ElevatedColors(content: @Composable () -> Unit) {
+    val colors = DoorTheme.colors
+    CompositionLocalProvider(
+        LocalDoorColors provides if (colors.isDark) DarkElevatedDoorColors else colors,
+        content = content,
+    )
 }
 
 private fun materialColors(c: DoorColors) = if (c.isDark) {
