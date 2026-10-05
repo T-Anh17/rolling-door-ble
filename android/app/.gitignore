@@ -1,1 +1,3 @@
 /build
+# Own app icon and splash logo, not part of the open-source release
+/src/brand/

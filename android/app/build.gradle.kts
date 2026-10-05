@@ -39,6 +39,12 @@ android {
     buildFeatures {
         compose = true
     }
+    // The app's own icon and splash logo live in src/brand (gitignored) and override the
+    // default icon in src/main. Without that folder the build uses the default icon.
+    sourceSets {
+        getByName("debug").res.srcDir("src/brand/res")
+        getByName("release").res.srcDir("src/brand/res")
+    }
 }
 
 dependencies {

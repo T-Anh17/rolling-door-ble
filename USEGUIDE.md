@@ -26,6 +26,7 @@ rolling-door-ble/
 │       ├── data/                             DeviceRepository (DataStore + PhoneKeyStore)
 │       ├── protocol/                         UUID, khung lệnh, phân tích mã QR
 │       └── ui/                               Theme, components, gate quyền Bluetooth, ghép đôi
+│   └── app/src/brand/                        Icon và logo splash riêng (không có trong repo)
 ├── firmware_esp/rolling-door-firmware-esp/   Firmware ESP32-S3 (PlatformIO, Arduino)
 │   ├── platformio.ini
 │   └── src/
@@ -94,6 +95,7 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 - **Không bao giờ commit** mật khẩu WiFi, mật khẩu OTA, khóa bí mật (setup secret, khóa điện thoại) hay mã RF đã học. Các giá trị này chỉ nhập lúc chạy và lưu trong NVS của ESP hoặc Android Keystore.
 - **Giá trị cần lúc biên dịch** thì đặt trong `secrets.h`. File này nằm trong `.gitignore`; commit kèm một bản mẫu `secrets.example.h` chỉ chứa giá trị giả.
 - **Không đưa vào repo** ảnh chụp bên trong remote hay vị trí DIP switch, vì đó chính là mã của cửa. Không đưa địa chỉ nhà hay ảnh nhận ra được ngôi nhà. Không đưa mã QR thật, ảnh chụp mã QR hay log serial có in mã QR.
+- **Icon app là logo riêng, không nằm trong license.** Logo đặt trong `android/app/src/brand/` (đã ignore), Gradle dùng nó ghi đè icon mặc định trong `src/main`. Không chép logo vào `src/main` hay bất cứ chỗ nào được commit.
 - **Dữ liệu mẫu** trong test và preview phải rõ là giả (ví dụ secret `00 01 02 … 0F`), không lấy từ board thật.
 - **Trước mỗi lần commit**, rà lại toàn bộ phần thay đổi (`git diff --staged`, cả file mới chưa theo dõi) để chắc không có thông tin nhạy cảm, và nói rõ là đã rà.
 

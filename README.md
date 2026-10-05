@@ -205,3 +205,5 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 The source code is released under the [MIT License](LICENSE).
 
 The license covers the source code only. The app name and the app icon are not covered by it. If you publish your own build or a fork, give it your own name and icon.
+
+The author's icon is not in this repository; a build from it uses the default Android icon. To use your own, put your launcher icon resources (and optionally `drawable/ic_launcher_foreground` for the splash screen) in `android/app/src/brand/res`, which is gitignored and overrides the defaults.
