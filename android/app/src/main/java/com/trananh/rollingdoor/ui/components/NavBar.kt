@@ -56,10 +56,13 @@ import dev.chrisbanes.haze.haze
 // once it is gone a 17sp title fades in, centered in a frosted bar (real 20dp blur on Android 12+,
 // 92% opaque background below). Content gets the screen margins and edge-to-edge insets.
 // topOverlay draws above everything, for BannerHost.
+// scrollable = false makes a fixed screen: the content fills the height left under the large
+// title (give it Modifier.weight) and the bar never collapses.
 @Composable
 fun NavBarScaffold(
     title: String,
     modifier: Modifier = Modifier,
+    scrollable: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
     topOverlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
@@ -78,7 +81,7 @@ fun NavBarScaffold(
             Modifier
                 .fillMaxSize()
                 .haze(hazeState)
-                .verticalScroll(scroll)
+                .then(if (scrollable) Modifier.verticalScroll(scroll) else Modifier)
                 .windowInsetsPadding(topInsets)
                 .padding(top = BAR_HEIGHT)
                 .padding(horizontal = spacing.screenMargin),
@@ -173,6 +176,19 @@ private fun NavBarScaffoldPreview() = PreviewColumn {
                 Card(Modifier.fillMaxWidth()) {
                     Text("Thẻ ${it + 1}", style = DoorTheme.type.body, color = DoorTheme.colors.label)
                 }
+            }
+        }
+    }
+}
+
+@DoorPreviews
+@Composable
+private fun NavBarScaffoldFixedPreview() = PreviewColumn {
+    Box(Modifier.height(560.dp)) {
+        NavBarScaffold(title = "Cửa cuốn", scrollable = false) {
+            StatusPill("Sẵn sàng", StatusTone.Ready)
+            Card(Modifier.fillMaxWidth().weight(1f)) {
+                Text("Chiếm hết phần còn lại", style = DoorTheme.type.body, color = DoorTheme.colors.label)
             }
         }
     }
