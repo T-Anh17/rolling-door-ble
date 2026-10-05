@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.Context
 import com.trananh.rollingdoor.protocol.CommandResult
 import com.trananh.rollingdoor.protocol.DoorProtocol
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -13,7 +14,7 @@ import java.util.UUID
 // One GATT connection to the door, set up the same way for pairing and for daily use.
 // Tracks the CHALLENGE nonce: every frame the firmware receives consumes it, and the firmware
 // notifies STATUS first and the next CHALLENGE right after.
-class DoorLink(context: Context, device: BluetoothDevice, onLost: () -> Unit = {}) {
+class DoorLink(context: Context, device: BluetoothDevice) {
     private sealed interface NonceState {
         data object None : NonceState
         class Fresh(val value: ByteArray) : NonceState
@@ -23,6 +24,7 @@ class DoorLink(context: Context, device: BluetoothDevice, onLost: () -> Unit = {
 
     private val nonce = MutableStateFlow<NonceState>(NonceState.None)
     private val statuses = Channel<ByteArray>(Channel.UNLIMITED)
+    private val down = CompletableDeferred<Unit>()
 
     private val gatt = GattClient(context, device, object : GattClient.Listener {
         override fun onNotification(uuid: UUID, value: ByteArray) {
@@ -35,13 +37,13 @@ class DoorLink(context: Context, device: BluetoothDevice, onLost: () -> Unit = {
 
         override fun onDisconnected() {
             markLost()
-            onLost()
         }
     })
 
     // connect -> MTU -> discover -> notify CHALLENGE + STATUS -> read CHALLENGE.
-    suspend fun open() {
-        gatt.connect()
+    // connectTimeoutMs = null with autoConnect waits until the device comes into range.
+    suspend fun open(autoConnect: Boolean = false, connectTimeoutMs: Long? = DIRECT_CONNECT_TIMEOUT_MS) {
+        gatt.connect(autoConnect, connectTimeoutMs)
         gatt.requestMtu(MTU)
         gatt.discoverServices()
         gatt.enableNotifications(DoorProtocol.SERVICE_UUID, DoorProtocol.CHALLENGE_UUID)
@@ -82,6 +84,9 @@ class DoorLink(context: Context, device: BluetoothDevice, onLost: () -> Unit = {
     suspend fun read(characteristic: UUID): ByteArray =
         gatt.read(DoorProtocol.SERVICE_UUID, characteristic)
 
+    // Returns once the link is down: dropped by the device or closed here.
+    suspend fun awaitDown() = down.await()
+
     fun close() {
         markLost()
         gatt.close()
@@ -90,11 +95,13 @@ class DoorLink(context: Context, device: BluetoothDevice, onLost: () -> Unit = {
     private fun markLost() {
         nonce.value = NonceState.Lost
         statuses.close()
+        down.complete(Unit)
     }
 
     private companion object {
         // Largest frame is the 82-byte PAIRING request; NimBLE accepts up to ~255.
         const val MTU = 247
         const val STATUS_TIMEOUT_MS = 3_000L
+        const val DIRECT_CONNECT_TIMEOUT_MS = 10_000L
     }
 }

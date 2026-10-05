@@ -115,16 +115,23 @@ class GattClient(
         }
     }
 
-    suspend fun connect() {
+    // autoConnect = false: direct connection; Android only gives up after ~30 s, so pass a short timeout.
+    // autoConnect = true: the controller waits for the device to advertise (allow list, low duty
+    // scan, no app scanning); pass timeoutMs = null to wait until it shows up or close() is called.
+    suspend fun connect(autoConnect: Boolean, timeoutMs: Long?) {
         mutex.withLock {
             check(gatt == null && !closed) { "connect() called twice" }
             val result = CompletableDeferred<Any>()
             pending = Pending(Op.Connect, result)
             try {
-                gatt = device.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
+                gatt = device.connectGatt(context, autoConnect, callback, BluetoothDevice.TRANSPORT_LE)
                     ?: throw BleException(LinkError.ConnectFailed, "connectGatt returned null")
-                withTimeoutOrNull(CONNECT_TIMEOUT_MS) { result.await() }
-                    ?: throw BleException(LinkError.Timeout, "connect timed out")
+                if (timeoutMs == null) {
+                    result.await()
+                } else {
+                    withTimeoutOrNull(timeoutMs) { result.await() }
+                        ?: throw BleException(LinkError.Timeout, "connect timed out")
+                }
             } catch (e: SecurityException) {
                 release()
                 throw BleException(LinkError.NoPermission, e.message ?: "BLUETOOTH_CONNECT missing")
@@ -239,7 +246,6 @@ class GattClient(
 
     private companion object {
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-        const val CONNECT_TIMEOUT_MS = 10_000L
         const val OP_TIMEOUT_MS = 5_000L
     }
 }
