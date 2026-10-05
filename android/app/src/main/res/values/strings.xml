@@ -65,8 +65,6 @@
 
     <!-- Control -->
     <string name="control_title">Rolling door</string>
-    <!-- Temporary until the control screen is built. %1$s: MAC address, %2$d: key slot -->
-    <string name="control_placeholder">Paired with %1$s (slot %2$d). The control screen comes in the next step.</string>
     <string name="control_up">Up</string>
     <string name="control_down">Down</string>
     <string name="control_lock">Lock</string>
@@ -91,4 +89,15 @@
     <!-- Settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_forget">Forget device</string>
+    <string name="settings_section_device">Device</string>
+    <string name="settings_address">Address</string>
+    <string name="settings_role">Role</string>
+    <string name="settings_role_admin">Admin</string>
+    <string name="settings_role_normal">Member</string>
+    <string name="settings_section_admin">Admin</string>
+    <string name="settings_add_phone">Add phone</string>
+    <string name="settings_add_phone_footer">Opens pairing for 60 seconds. Within that time, scan this device’s QR code on the new phone. Needs a connection to the door.</string>
+    <string name="settings_forget_title">Forget device?</string>
+    <string name="settings_forget_body">This phone will no longer control the door until it pairs again with the device’s QR code. The device keeps this phone’s key slot until an admin removes it or the device is reset.</string>
+    <string name="settings_cancel">Cancel</string>
 </resources>

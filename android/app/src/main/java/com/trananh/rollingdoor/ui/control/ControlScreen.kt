@@ -17,8 +17,12 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
@@ -52,7 +56,7 @@ import com.trananh.rollingdoor.ui.theme.RollingDoorTheme
 // The remote: connection status and the four door buttons, on one screen that never scrolls.
 // Everything else (device info, admin actions, Forget device) lives in Settings.
 @Composable
-fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onOpenSettings: () -> Unit) {
+fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onForget: () -> Unit) {
     // Keyed by slot too: pairing the same device again gives a new key.
     val viewModel: ControlViewModel = viewModel(
         key = "control-${device.mac}-${device.keyId}",
@@ -69,14 +73,30 @@ fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onOpenSetting
         }
     }
 
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    // The banner sits under the sheet: close the sheet when Add phone answers.
+    LaunchedEffect(state.message) {
+        if (state.message != null) settingsOpen = false
+    }
+
     ControlContent(
         state = state,
         gate = gate.takeIf { it.status != GateStatus.Ready },
         onSend = viewModel::send,
         onRetry = viewModel::retryNow,
         onDismissMessage = viewModel::dismissMessage,
-        onOpenSettings = onOpenSettings,
+        onOpenSettings = { settingsOpen = true },
     )
+    if (settingsOpen) {
+        SettingsSheet(
+            device = device,
+            canAddPhone = state.connection == ConnectionState.Ready && state.sending == null,
+            addingPhone = state.sending == Command.OpenPairing,
+            onAddPhone = { viewModel.send(Command.OpenPairing) },
+            onForget = onForget,
+            onDismiss = { settingsOpen = false },
+        )
+    }
 }
 
 // gate: what still blocks Bluetooth, shown in place of the buttons; null when nothing does.

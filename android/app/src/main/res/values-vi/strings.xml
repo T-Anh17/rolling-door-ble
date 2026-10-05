@@ -65,7 +65,6 @@
 
     <!-- Control -->
     <string name="control_title">Cửa cuốn</string>
-    <string name="control_placeholder">Đã ghép đôi với %1$s (ô khóa %2$d). Màn điều khiển sẽ có ở bước tiếp theo.</string>
     <string name="control_up">Lên</string>
     <string name="control_down">Xuống</string>
     <string name="control_lock">Khóa</string>
@@ -90,4 +89,15 @@
     <!-- Settings -->
     <string name="settings_title">Cài đặt</string>
     <string name="settings_forget">Quên thiết bị</string>
+    <string name="settings_section_device">Thiết bị</string>
+    <string name="settings_address">Địa chỉ</string>
+    <string name="settings_role">Vai trò</string>
+    <string name="settings_role_admin">Quản trị</string>
+    <string name="settings_role_normal">Thường</string>
+    <string name="settings_section_admin">Quản trị</string>
+    <string name="settings_add_phone">Thêm điện thoại</string>
+    <string name="settings_add_phone_footer">Mở ghép đôi trong 60 giây. Trong thời gian đó, quét mã QR của thiết bị trên điện thoại mới. Cần đang kết nối với cửa.</string>
+    <string name="settings_forget_title">Quên thiết bị?</string>
+    <string name="settings_forget_body">Điện thoại này sẽ không điều khiển được cửa cho tới khi ghép đôi lại bằng mã QR của thiết bị. Thiết bị vẫn giữ ô khóa của điện thoại này cho tới khi quản trị viên xóa hoặc thiết bị được đặt lại.</string>
+    <string name="settings_cancel">Hủy</string>
 </resources>

@@ -2,28 +2,21 @@ package com.trananh.rollingdoor.ui
 
 import android.bluetooth.BluetoothAdapter
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.trananh.rollingdoor.R
 import com.trananh.rollingdoor.RollingDoorApp
 import com.trananh.rollingdoor.data.DeviceRepository
 import com.trananh.rollingdoor.data.SavedDevice
-import com.trananh.rollingdoor.ui.components.NavBarScaffold
-import com.trananh.rollingdoor.ui.components.SecondaryButton
+import com.trananh.rollingdoor.ui.control.ControlScreen
 import com.trananh.rollingdoor.ui.gate.GateScreen
 import com.trananh.rollingdoor.ui.gate.GateStatus
 import com.trananh.rollingdoor.ui.gate.rememberBluetoothGate
 import com.trananh.rollingdoor.ui.pairing.PairingScreen
 import com.trananh.rollingdoor.ui.theme.DoorMotion
-import com.trananh.rollingdoor.ui.theme.DoorTheme
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emitAll
@@ -69,20 +62,7 @@ fun RootScreen(state: RootState, adapter: BluetoothAdapter?, onForget: () -> Uni
                 val gate = rememberBluetoothGate(adapter, forPairing = true)
                 if (gate.status == GateStatus.Ready) PairingScreen() else GateScreen(gate)
             }
-            is RootState.Paired -> ControlPlaceholder(current.device, onForget)
+            is RootState.Paired -> ControlScreen(current.device, adapter, onForget)
         }
-    }
-}
-
-// Stand-in until the control screen (plan step 9): proves pairing worked and allows starting over.
-@Composable
-private fun ControlPlaceholder(device: SavedDevice, onForget: () -> Unit) {
-    NavBarScaffold(title = stringResource(R.string.control_title)) {
-        Text(
-            stringResource(R.string.control_placeholder, device.mac, device.keyId),
-            style = DoorTheme.type.body,
-            color = DoorTheme.colors.secondaryLabel,
-        )
-        SecondaryButton(stringResource(R.string.settings_forget), onForget, Modifier.fillMaxWidth())
     }
 }
