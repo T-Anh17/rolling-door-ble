@@ -1,18 +1,45 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+#include "ble_server.h"
+#include "protocol.h"
+#include "rf.h"
+
+namespace {
+
+Result handleCommand(const CommandFrame& frame) {
+  Serial.printf("[CMD] key=%u cmd=0x%02X %s\n", frame.keyId, frame.command,
+                commandName(frame.command));
+  Serial.println("[AUTH] not checked (phase 1)");
+
+  if (!isDoorCommand(frame.command)) {
+    return Result::BadCommand;
+  }
+  return rf::send(static_cast<DoorCommand>(frame.command)) ? Result::Ok : Result::RfError;
+}
+
+}  // namespace
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  Serial.begin(115200);
+  // USB CDC: never block on logging when no computer is reading the port.
+  Serial.setTxTimeoutMs(0);
+  delay(500);
+  Serial.println();
+  Serial.println("=== rolling-door-ble firmware, phase 1 ===");
+
+  rf::begin();
+  ble::begin();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+  CommandFrame frame;
+  if (!ble::receive(frame)) {
+    delay(10);
+    return;
+  }
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+  const Result result = handleCommand(frame);
+  Serial.printf("[CMD] result 0x%02X\n", static_cast<uint8_t>(result));
+  ble::notifyStatus(frame.command, result);
+  ble::rotateChallenge();
 }

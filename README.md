@@ -2,9 +2,11 @@
 
 Control a 433MHz rolling door from an Android phone over Bluetooth Low Energy.
 
-An ESP32-S3 sits near the door and replays the fixed codes of the original RF remote. The Android app connects to it over BLE as soon as it opens and shows the same four buttons as the remote: Up, Stop, Down, Lock.
+An ESP32-S3 sits near the door and replays the fixed codes of the original RF remote. The Android app connects to it over BLE as soon as it opens and shows the same four buttons as the remote: Up, Down, Lock, Unlock.
 
-> **Status:** planning done, project skeletons created. No working firmware or app yet. See [Roadmap](#roadmap).
+The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
+
+> **Status:** phase 1 done. The firmware runs a BLE GATT server with a fake RF layer (serial log only); no authentication or app yet. See [Roadmap](#roadmap).
 
 ## How it works
 
@@ -43,21 +45,22 @@ rolling-door-ble/
 
 ## BLE protocol
 
-One custom GATT service with four characteristics:
+One custom GATT service with four characteristics. The device advertises as `RollingDoor`, with the service UUID in the advertising packet.
 
-| Characteristic | Properties | Payload |
-|---|---|---|
-| `CHALLENGE` | read, notify | 16-byte random nonce, replaced after every command |
-| `COMMAND` | write | `[key id: 1 byte][command: 1 byte][HMAC-SHA256(key, nonce + command), first 16 bytes]` |
-| `STATUS` | notify | `[command][result]` |
-| `INFO` | read, notify | `[power source][battery percent]` |
+| Characteristic | UUID | Properties | Payload |
+|---|---|---|---|
+| Service | `a7930001-966e-4240-b881-5c2e2f2203a8` | | |
+| `CHALLENGE` | `a7930002-966e-4240-b881-5c2e2f2203a8` | read, notify | 16-byte random nonce, replaced after every command |
+| `COMMAND` | `a7930003-966e-4240-b881-5c2e2f2203a8` | write | `[key id: 1 byte][command: 1 byte][HMAC-SHA256(key, nonce + command), first 16 bytes]` |
+| `STATUS` | `a7930004-966e-4240-b881-5c2e2f2203a8` | notify | `[command][result]` |
+| `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[power source][battery percent]` |
 
 | Command | Function | Allowed for |
 |---|---|---|
 | `01` | Up | Any paired phone |
-| `02` | Stop | Any paired phone |
-| `03` | Down | Any paired phone |
-| `04` | Lock | Any paired phone |
+| `02` | Down | Any paired phone |
+| `03` | Lock (stops a moving door) | Any paired phone |
+| `04` | Unlock | Any paired phone |
 | `05` | Enter OTA update mode | Admin |
 | `06` | Open pairing for a new phone | Admin |
 | `07` | Revoke a phone | Admin |
@@ -108,7 +111,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 
 ## Roadmap
 
-- [ ] **Phase 1 – BLE skeleton:** GATT server on the ESP32 with a fake RF layer (serial log only)
+- [x] **Phase 1 – BLE skeleton:** GATT server on the ESP32 with a fake RF layer (serial log only)
 - [ ] **Phase 2 – Pairing and authentication:** pairing button, key table, HMAC check, admin role
 - [ ] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
 - [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, power status in the app
