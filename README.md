@@ -38,7 +38,7 @@ The remote's frequency still has to be confirmed from the marking on its SAW res
 rolling-door-ble/
 ├── android/                                  Android app (Kotlin, Jetpack Compose)
 ├── firmware_esp/rolling-door-firmware-esp/   ESP32-S3 firmware (PlatformIO, Arduino)
-└── docs/                                     Project plan
+└── docs/                                     Project plan (PLAN.md, in Vietnamese)
 ```
 
 ## BLE protocol
@@ -85,7 +85,7 @@ The board has no user LED, so use the serial log to check behaviour.
 
 ### Android app
 
-Requires Android Studio (for the SDK and JDK) and a phone running Android 12 or newer with USB debugging enabled. From `android`:
+Requires Android Studio (for the SDK and JDK) and a phone running Android 8.0 (API 26) or newer with USB debugging enabled. From `android`:
 
 ```
 gradlew installDebug
@@ -93,12 +93,16 @@ gradlew installDebug
 
 BLE does not work in the emulator; use a real device.
 
+The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.
+
 ## Branches
 
 | Branch | Purpose |
 |---|---|
 | `main` | Stable code that is deployed on the device and phone |
 | `dev` | Day-to-day development |
+| `android` | Android app work, merged into `dev` |
+| `esp32` | ESP32 firmware work, merged into `dev` |
 
 Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.2.0`, ...).
 
@@ -112,7 +116,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, fit battery and mains detection
 - [ ] **Phase 7 – More phones:** admin UI to add, rename and revoke phones
 
-The full plan (in Vietnamese) is in [`docs/ke-hoach-cua-cuon-esp32.docx`](docs/ke-hoach-cua-cuon-esp32.docx).
+The full plan (in Vietnamese) is in [`docs/PLAN.md`](docs/PLAN.md), also available as [`docs/ke-hoach-cua-cuon-esp32.docx`](docs/ke-hoach-cua-cuon-esp32.docx).
 
 ## Security notes
 
