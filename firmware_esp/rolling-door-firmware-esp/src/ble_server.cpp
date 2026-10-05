@@ -3,25 +3,43 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <esp_random.h>
+#include <string.h>
 
 #include "config.h"
 
 namespace ble {
 namespace {
 
-QueueHandle_t commandQueue = nullptr;
+QueueHandle_t eventQueue = nullptr;
+NimBLEServer* server = nullptr;
 NimBLECharacteristic* challengeChar = nullptr;
 NimBLECharacteristic* statusChar = nullptr;
+NimBLECharacteristic* pairingChar = nullptr;
+uint8_t currentNonce[config::kNonceLength];
+
+void post(Event::Type type, uint16_t connHandle, const uint8_t* data = nullptr, size_t length = 0) {
+  Event event = {};
+  event.type = type;
+  event.connHandle = connHandle;
+  event.length = static_cast<uint8_t>(length);
+  if (data != nullptr) {
+    memcpy(event.data, data, length);
+  }
+  if (xQueueSend(eventQueue, &event, 0) != pdTRUE) {
+    Serial.println("[BLE] event queue full, event dropped");
+  }
+}
 
 class ServerCallbacks : public NimBLEServerCallbacks {
   void onConnect(NimBLEServer*, NimBLEConnInfo& connInfo) override {
     Serial.printf("[BLE] connected %s\n", connInfo.getAddress().toString().c_str());
-    rotateChallenge();
+    post(Event::Type::Connected, connInfo.getConnHandle());
   }
 
   void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {
     Serial.printf("[BLE] disconnected %s, reason 0x%X, advertising again\n",
                   connInfo.getAddress().toString().c_str(), reason);
+    post(Event::Type::Disconnected, connInfo.getConnHandle());
   }
 
   void onMTUChange(uint16_t mtu, NimBLEConnInfo&) override {
@@ -29,34 +47,58 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   }
 };
 
+// Write callbacks run on the NimBLE host task: only queue the data, never do slow work here.
 class CommandCallbacks : public NimBLECharacteristicCallbacks {
-  // Runs on the NimBLE host task: only queue the frame, never do slow work here.
-  void onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo&) override {
+  void onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& connInfo) override {
     const NimBLEAttValue& value = characteristic->getValue();
-    CommandFrame frame;
-    if (!parseFrame(value.data(), value.size(), frame)) {
-      Serial.printf("[BLE] write %u bytes, expected %u, rejected\n",
+    if (value.size() < config::kMinFrameLength || value.size() > config::kMaxFrameLength) {
+      Serial.printf("[BLE] COMMAND write %u bytes, expected %u-%u, rejected\n",
                     static_cast<unsigned>(value.size()),
-                    static_cast<unsigned>(config::kFrameLength));
-      notifyStatus(0x00, Result::BadCommand);
+                    static_cast<unsigned>(config::kMinFrameLength),
+                    static_cast<unsigned>(config::kMaxFrameLength));
+      post(Event::Type::BadCommand, connInfo.getConnHandle());
       return;
     }
-    Serial.printf("[BLE] write %u bytes, key=%u\n",
-                  static_cast<unsigned>(value.size()), frame.keyId);
-    if (xQueueSend(commandQueue, &frame, 0) != pdTRUE) {
-      Serial.println("[BLE] command queue full, frame dropped");
-    }
+    post(Event::Type::Command, connInfo.getConnHandle(), value.data(), value.size());
   }
 };
+
+class PairingCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& connInfo) override {
+    const NimBLEAttValue& value = characteristic->getValue();
+    const size_t length = value.size() > config::kPairingRequestLength
+                              ? 0  // too long: forward an empty request, rejected as BadCommand
+                              : value.size();
+    post(Event::Type::PairingRequest, connInfo.getConnHandle(), value.data(), length);
+  }
+};
+
+void applyScanResponse(bool pairingOpen) {
+  NimBLEAdvertisementData scanResponse;
+  scanResponse.setName(config::kDeviceName);
+  if (pairingOpen) {
+    const uint8_t data[] = {config::kManufacturerId & 0xFF, config::kManufacturerId >> 8, 0x01};
+    scanResponse.setManufacturerData(data, sizeof(data));
+  }
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  const bool wasAdvertising = advertising->isAdvertising();
+  if (wasAdvertising) {
+    advertising->stop();
+  }
+  advertising->setScanResponseData(scanResponse);
+  if (wasAdvertising) {
+    advertising->start();
+  }
+}
 
 }  // namespace
 
 void begin() {
-  commandQueue = xQueueCreate(config::kCommandQueueDepth, sizeof(CommandFrame));
+  eventQueue = xQueueCreate(config::kEventQueueDepth, sizeof(Event));
 
   NimBLEDevice::init(config::kDeviceName);
 
-  NimBLEServer* server = NimBLEDevice::createServer();
+  server = NimBLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
   server->advertiseOnDisconnect(true);
 
@@ -78,25 +120,39 @@ void begin() {
   const uint8_t info[] = {0x00, 0xFF};
   infoChar->setValue(info, sizeof(info));
 
+  pairingChar = service->createCharacteristic(config::kPairingUuid,
+                                              NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
+  pairingChar->setCallbacks(new PairingCallbacks());
+
   rotateChallenge();
   server->start();
 
   // Service UUID goes in the advertising packet so the app can scan by it;
-  // the name goes in the scan response (scan response must be enabled first).
+  // the name (and the pairing flag) go in the scan response.
   NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
   advertising->addServiceUUID(config::kServiceUuid);
   advertising->enableScanResponse(true);
-  advertising->setName(config::kDeviceName);
   advertising->setMinInterval(config::kAdvMinInterval);
   advertising->setMaxInterval(config::kAdvMaxInterval);
+  applyScanResponse(false);
   advertising->start();
 
   Serial.printf("[BLE] advertising as \"%s\", address %s\n", config::kDeviceName,
                 NimBLEDevice::getAddress().toString().c_str());
 }
 
-bool receive(CommandFrame& out) {
-  return xQueueReceive(commandQueue, &out, 0) == pdTRUE;
+bool nextEvent(Event& out) {
+  return xQueueReceive(eventQueue, &out, 0) == pdTRUE;
+}
+
+const uint8_t* nonce() {
+  return currentNonce;
+}
+
+void rotateChallenge() {
+  esp_fill_random(currentNonce, sizeof(currentNonce));
+  challengeChar->setValue(currentNonce, sizeof(currentNonce));
+  challengeChar->notify();
 }
 
 void notifyStatus(uint8_t command, Result result) {
@@ -105,11 +161,21 @@ void notifyStatus(uint8_t command, Result result) {
   statusChar->notify();
 }
 
-void rotateChallenge() {
-  uint8_t nonce[config::kNonceLength];
-  esp_fill_random(nonce, sizeof(nonce));
-  challengeChar->setValue(nonce, sizeof(nonce));
-  challengeChar->notify();
+void setPairingResponse(const uint8_t* data, size_t length) {
+  pairingChar->setValue(data, length);
+}
+
+void clearPairingResponse() {
+  const uint8_t empty[1] = {0};
+  pairingChar->setValue(empty, 0);
+}
+
+void setPairingAdvertised(bool open) {
+  applyScanResponse(open);
+}
+
+void disconnect(uint16_t connHandle) {
+  server->disconnect(connHandle);
 }
 
 }  // namespace ble
