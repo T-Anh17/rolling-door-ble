@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ fun TextInput(
     enabled: Boolean = true,
     textStyle: TextStyle = DoorTheme.type.body,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     val colors = DoorTheme.colors
     val shape = DoorTheme.radius.control
@@ -46,6 +48,7 @@ fun TextInput(
             textStyle = textStyle.copy(color = colors.label),
             cursorBrush = SolidColor(colors.accent),
             keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
             decorationBox = { field ->
                 Box(
                     Modifier

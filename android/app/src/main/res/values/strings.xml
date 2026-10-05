@@ -1,3 +1,65 @@
 <resources>
     <string name="app_name">Rolling Door</string>
+
+    <!-- Bluetooth gate -->
+    <string name="gate_permission_title">Allow nearby devices</string>
+    <string name="gate_permission_body">The app needs the Nearby devices permission to find and connect to your rolling door.</string>
+    <string name="gate_location_permission_title">Allow location</string>
+    <string name="gate_location_permission_body">On Android 11 and below, scanning for Bluetooth devices needs the location permission. It is only used while pairing; the app never reads where you are.</string>
+    <string name="gate_permission_blocked_body">The permission was turned down. Open the app settings and allow it there.</string>
+    <string name="gate_allow">Allow</string>
+    <string name="gate_open_settings">Open settings</string>
+    <string name="gate_bluetooth_off_title">Bluetooth is off</string>
+    <string name="gate_bluetooth_off_body">Turn on Bluetooth to connect to your rolling door.</string>
+    <string name="gate_turn_on_bluetooth">Turn on Bluetooth</string>
+    <string name="gate_location_off_title">Location is off</string>
+    <string name="gate_location_off_body">On Android 11 and below, location must be on to find the device while pairing.</string>
+    <string name="gate_open_location_settings">Open location settings</string>
+
+    <!-- Pairing -->
+    <string name="pairing_title">Pairing</string>
+    <string name="pairing_intro">Scan the QR code printed by the device so this phone can control the door. The first phone to pair becomes the admin.</string>
+    <string name="pairing_scan">Scan QR code</string>
+    <string name="pairing_enter_manually">Enter code manually</string>
+    <string name="pairing_manual_label">Paste the setup code, starting with RDOOR1:</string>
+    <string name="pairing_manual_invalid">This is not a valid setup code</string>
+    <string name="pairing_pair">Pair</string>
+    <string name="pairing_cancel">Cancel</string>
+    <string name="pairing_retry">Try again</string>
+    <string name="pairing_scan_another">Scan another code</string>
+    <string name="pairing_step_find">Find device</string>
+    <string name="pairing_step_connect">Connect</string>
+    <string name="pairing_step_key">Exchange key</string>
+    <string name="pairing_step_confirm">Confirm</string>
+    <string name="pairing_closed_hint">The device is not advertising open pairing. If another phone is already paired, hold the BOOT button for 3 seconds.</string>
+    <string name="pairing_error_invalid_code">Not a rolling door code</string>
+    <string name="pairing_error_invalid_code_body">Scan the QR code printed by the device. Its text starts with RDOOR1.</string>
+    <string name="pairing_error_scanner">Cannot open the scanner</string>
+    <string name="pairing_error_scanner_body">The QR scanner needs Google Play services. You can enter the code manually instead.</string>
+    <string name="pairing_error_bluetooth_off">Bluetooth is off</string>
+    <string name="pairing_error_bluetooth_off_body">Turn on Bluetooth and try again.</string>
+    <string name="pairing_error_permission">Bluetooth permission missing</string>
+    <string name="pairing_error_permission_body">Allow nearby devices for this app and try again.</string>
+    <string name="pairing_error_not_found">Device not found</string>
+    <string name="pairing_error_not_found_body">Stand close to the door, check that the device has power, and try again.</string>
+    <string name="pairing_error_connection">Connection lost</string>
+    <string name="pairing_error_connection_body">The connection dropped while pairing. Move closer to the device and try again.</string>
+    <string name="pairing_error_closed">Pairing is closed</string>
+    <string name="pairing_error_closed_body">Hold the BOOT button on the device for 3 seconds, then try again.</string>
+    <string name="pairing_error_wrong_code">Wrong QR code for this device</string>
+    <string name="pairing_error_wrong_code_body">This code belongs to another device. Scan the code printed by this device.</string>
+    <string name="pairing_error_locked_out">Locked for 60 seconds</string>
+    <string name="pairing_error_locked_out_body">Too many failed attempts. Wait a minute and try again.</string>
+    <string name="pairing_error_table_full">Device already has 8 phones</string>
+    <string name="pairing_error_table_full_body">Remove a paired phone before adding a new one.</string>
+    <string name="pairing_error_invalid_response">Invalid response</string>
+    <string name="pairing_error_invalid_response_body">The device answered something unexpected. Try again; if it keeps failing, check the firmware.</string>
+
+    <!-- Control -->
+    <string name="control_title">Rolling door</string>
+    <!-- Temporary until the control screen is built. %1$s: MAC address, %2$d: key slot -->
+    <string name="control_placeholder">Paired with %1$s (slot %2$d). The control screen comes in the next step.</string>
+
+    <!-- Settings -->
+    <string name="settings_forget">Forget device</string>
 </resources>
