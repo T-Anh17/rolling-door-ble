@@ -34,8 +34,10 @@
     <string name="pairing_closed_hint">Thiết bị chưa mở ghép đôi. Nếu cửa đã có điện thoại khác, giữ nút BOOT 3 giây.</string>
     <string name="pairing_error_invalid_code">Không phải mã của cửa cuốn</string>
     <string name="pairing_error_invalid_code_body">Hãy quét mã QR in từ thiết bị, nội dung bắt đầu bằng RDOOR1.</string>
-    <string name="pairing_error_scanner">Không mở được trình quét</string>
-    <string name="pairing_error_scanner_body">Trình quét mã QR cần Google Play services. Bạn có thể nhập mã thủ công.</string>
+    <string name="pairing_error_camera_permission">Chưa cho phép camera</string>
+    <string name="pairing_error_camera_permission_body">Cho phép camera để quét mã QR, hoặc nhập mã thủ công bên dưới.</string>
+    <string name="pairing_error_camera">Không mở được camera</string>
+    <string name="pairing_error_camera_body">Camera đang bận hoặc không dùng được. Hãy nhập mã thủ công bên dưới.</string>
     <string name="pairing_error_bluetooth_off">Bluetooth đang tắt</string>
     <string name="pairing_error_bluetooth_off_body">Bật Bluetooth rồi thử lại.</string>
     <string name="pairing_error_permission">Thiếu quyền Bluetooth</string>
@@ -54,6 +56,12 @@
     <string name="pairing_error_table_full_body">Cần xóa bớt một điện thoại đã ghép trước khi thêm máy mới.</string>
     <string name="pairing_error_invalid_response">Phản hồi không hợp lệ</string>
     <string name="pairing_error_invalid_response_body">Thiết bị trả lời không như mong đợi. Hãy thử lại; nếu vẫn lỗi, kiểm tra firmware.</string>
+
+    <!-- QR scanner -->
+    <string name="scanner_hint">Đưa mã QR vào trong khung</string>
+    <string name="scanner_wrong_code">Mã QR này không phải của cửa cuốn</string>
+    <string name="scanner_close">Đóng</string>
+    <string name="scanner_torch">Đèn pin</string>
 
     <!-- Control -->
     <string name="control_title">Cửa cuốn</string>

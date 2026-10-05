@@ -34,8 +34,10 @@
     <string name="pairing_closed_hint">The device is not advertising open pairing. If another phone is already paired, hold the BOOT button for 3 seconds.</string>
     <string name="pairing_error_invalid_code">Not a rolling door code</string>
     <string name="pairing_error_invalid_code_body">Scan the QR code printed by the device. Its text starts with RDOOR1.</string>
-    <string name="pairing_error_scanner">Cannot open the scanner</string>
-    <string name="pairing_error_scanner_body">The QR scanner needs Google Play services. You can enter the code manually instead.</string>
+    <string name="pairing_error_camera_permission">Camera not allowed</string>
+    <string name="pairing_error_camera_permission_body">Allow the camera to scan the QR code, or enter the code manually below.</string>
+    <string name="pairing_error_camera">Cannot open the camera</string>
+    <string name="pairing_error_camera_body">The camera is busy or unavailable. Enter the code manually below.</string>
     <string name="pairing_error_bluetooth_off">Bluetooth is off</string>
     <string name="pairing_error_bluetooth_off_body">Turn on Bluetooth and try again.</string>
     <string name="pairing_error_permission">Bluetooth permission missing</string>
@@ -54,6 +56,12 @@
     <string name="pairing_error_table_full_body">Remove a paired phone before adding a new one.</string>
     <string name="pairing_error_invalid_response">Invalid response</string>
     <string name="pairing_error_invalid_response_body">The device answered something unexpected. Try again; if it keeps failing, check the firmware.</string>
+
+    <!-- QR scanner -->
+    <string name="scanner_hint">Point the camera at the QR code</string>
+    <string name="scanner_wrong_code">This QR code is not for a rolling door</string>
+    <string name="scanner_close">Close</string>
+    <string name="scanner_torch">Flashlight</string>
 
     <!-- Control -->
     <string name="control_title">Rolling door</string>

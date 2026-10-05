@@ -24,6 +24,12 @@
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- QR scanning while pairing; the code can also be typed in, so no camera is required. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
     <!-- allowBackup="false" already stops every backup on Android 11 and below; the extraction
          rules are only for Android 12+ device-to-device transfer, hence no fullBackupContent. -->
     <application
@@ -37,11 +43,6 @@
         android:theme="@style/Theme.RollingDoor"
         tools:ignore="DataExtractionRules"
         tools:targetApi="s">
-
-        <!-- Download the Google code scanner module at install time, not on the first scan. -->
-        <meta-data
-            android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="barcode_ui" />
 
         <activity
             android:name=".MainActivity"

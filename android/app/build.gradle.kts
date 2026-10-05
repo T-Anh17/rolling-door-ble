@@ -20,6 +20,8 @@ android {
 
     buildTypes {
         release {
+            // Phones only: drops ML Kit's x86 / x86_64 libraries (~12 MB) that only emulators use.
+            ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -55,7 +57,10 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.play.services.code.scanner)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.mlkit.barcode.scanning)
     implementation(libs.haze)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

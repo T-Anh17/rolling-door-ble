@@ -1,5 +1,15 @@
 package com.trananh.rollingdoor.ui.pairing
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,8 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -28,12 +36,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.google.mlkit.common.MlKitException
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.trananh.rollingdoor.R
 import com.trananh.rollingdoor.ui.components.Card
 import com.trananh.rollingdoor.ui.components.DoorPreviews
@@ -52,18 +57,53 @@ import com.trananh.rollingdoor.ui.theme.RollingDoorTheme
 @Composable
 fun PairingScreen(viewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory)) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val scan = rememberQrScanner(onScanned = viewModel::onScanned, onUnavailable = viewModel::onScannerUnavailable)
-    PairingContent(
-        state = state,
-        onScan = scan,
-        onSubmitManual = viewModel::submitManual,
-        onRetry = viewModel::retry,
-        onCancel = viewModel::cancel,
-        onScanAnother = {
-            viewModel.reset()
-            scan()
-        },
-    )
+    val context = LocalContext.current
+    var scanning by rememberSaveable { mutableStateOf(false) }
+    // Refused for good: the system dialog no longer shows, so Scan opens app settings instead.
+    var cameraBlocked by rememberSaveable { mutableStateOf(false) }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            scanning = true
+        } else {
+            cameraBlocked = context.findActivity()
+                ?.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) == false
+            viewModel.onCameraDenied()
+        }
+    }
+    val scan = {
+        when {
+            context.hasCameraPermission() -> scanning = true
+            cameraBlocked -> context.openAppSettings()
+            else -> cameraPermission.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    Box {
+        PairingContent(
+            state = state,
+            onScan = scan,
+            onSubmitManual = viewModel::submitManual,
+            onRetry = viewModel::retry,
+            onCancel = viewModel::cancel,
+            onScanAnother = {
+                viewModel.reset()
+                scan()
+            },
+        )
+        if (scanning) {
+            QrScannerOverlay(
+                onCode = { code ->
+                    scanning = false
+                    viewModel.onScanned(code)
+                },
+                onClose = { scanning = false },
+                onCameraError = {
+                    scanning = false
+                    viewModel.onCameraFailed()
+                },
+            )
+        }
+    }
 }
 
 @Composable
@@ -98,8 +138,18 @@ private fun PairingContent(
                         }
                     }
                     PairingUiState.Done -> StepsCard(stage = null, failed = false)
-                    is PairingUiState.Failed -> {
-                        if (current.stage != null) StepsCard(current.stage, failed = true)
+                    // Failed before any step (bad code, scanner): back to the start, with the
+                    // problem on top. Manual entry opens by itself when the scanner is missing.
+                    is PairingUiState.Failed -> if (current.stage == null) {
+                        ProblemCard(current.problem)
+                        IdleActions(
+                            onScan,
+                            onSubmitManual,
+                            startManual = current.problem == PairingProblem.CameraUnavailable ||
+                                current.problem == PairingProblem.CameraPermission,
+                        )
+                    } else {
+                        StepsCard(current.stage, failed = true)
                         ProblemCard(current.problem)
                         if (current.canRetry) {
                             PrimaryButton(stringResource(R.string.pairing_retry), onRetry, Modifier.fillMaxWidth())
@@ -118,8 +168,8 @@ private fun PairingContent(
 }
 
 @Composable
-private fun IdleActions(onScan: () -> Unit, onSubmitManual: (String) -> Boolean) {
-    var manual by rememberSaveable { mutableStateOf(false) }
+private fun IdleActions(onScan: () -> Unit, onSubmitManual: (String) -> Boolean, startManual: Boolean = false) {
+    var manual by rememberSaveable { mutableStateOf(startManual) }
     var text by rememberSaveable { mutableStateOf("") }
     var invalid by rememberSaveable { mutableStateOf(false) }
     val submit = { invalid = !onSubmitManual(text) }
@@ -208,7 +258,8 @@ private fun Hint(text: String) {
 
 private fun PairingProblem.text(): Pair<Int, Int> = when (this) {
     PairingProblem.InvalidCode -> R.string.pairing_error_invalid_code to R.string.pairing_error_invalid_code_body
-    PairingProblem.ScannerUnavailable -> R.string.pairing_error_scanner to R.string.pairing_error_scanner_body
+    PairingProblem.CameraPermission -> R.string.pairing_error_camera_permission to R.string.pairing_error_camera_permission_body
+    PairingProblem.CameraUnavailable -> R.string.pairing_error_camera to R.string.pairing_error_camera_body
     PairingProblem.BluetoothOff -> R.string.pairing_error_bluetooth_off to R.string.pairing_error_bluetooth_off_body
     PairingProblem.NoPermission -> R.string.pairing_error_permission to R.string.pairing_error_permission_body
     PairingProblem.NotFound -> R.string.pairing_error_not_found to R.string.pairing_error_not_found_body
@@ -220,29 +271,17 @@ private fun PairingProblem.text(): Pair<Int, Int> = when (this) {
     PairingProblem.InvalidResponse -> R.string.pairing_error_invalid_response to R.string.pairing_error_invalid_response_body
 }
 
-// Google code scanner (Play services UI, no camera permission), QR codes only.
-// Cancelling the scanner does nothing; any other failure reports the scanner as unavailable.
-@Composable
-private fun rememberQrScanner(onScanned: (String) -> Unit, onUnavailable: () -> Unit): () -> Unit {
-    val context = LocalContext.current
-    val currentOnScanned by rememberUpdatedState(onScanned)
-    val currentOnUnavailable by rememberUpdatedState(onUnavailable)
-    val scanner = remember(context) {
-        GmsBarcodeScanning.getClient(
-            context,
-            GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build(),
-        )
-    }
-    return remember(scanner) {
-        {
-            scanner.startScan()
-                .addOnSuccessListener { barcode -> barcode.rawValue?.let { currentOnScanned(it) } }
-                .addOnFailureListener { e ->
-                    val cancelled = e is MlKitException && e.errorCode == MlKitException.CODE_SCANNER_CANCELLED
-                    if (!cancelled) currentOnUnavailable()
-                }
-        }
-    }
+private fun Context.hasCameraPermission() =
+    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+
+private fun Context.openAppSettings() {
+    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @DoorPreviews

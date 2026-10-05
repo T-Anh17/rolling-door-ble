@@ -21,8 +21,9 @@ import kotlinx.coroutines.launch
 enum class PairingStage { Find, Connect, ExchangeKey, Confirm }
 
 enum class PairingProblem {
-    InvalidCode,        // the QR code is not an RDOOR1 setup code
-    ScannerUnavailable, // Google code scanner could not start
+    InvalidCode,       // the QR code is not an RDOOR1 setup code
+    CameraPermission,  // camera refused; the code can still be typed in
+    CameraUnavailable, // no camera, or it could not start
     BluetoothOff,
     NoPermission,
     NotFound,
@@ -72,8 +73,12 @@ class PairingViewModel(private val newSession: () -> PairingSession) : ViewModel
         return true
     }
 
-    fun onScannerUnavailable() {
-        _state.value = PairingUiState.Failed(PairingProblem.ScannerUnavailable, stage = null, canRetry = false)
+    fun onCameraDenied() {
+        _state.value = PairingUiState.Failed(PairingProblem.CameraPermission, stage = null, canRetry = false)
+    }
+
+    fun onCameraFailed() {
+        _state.value = PairingUiState.Failed(PairingProblem.CameraUnavailable, stage = null, canRetry = false)
     }
 
     fun retry() {
