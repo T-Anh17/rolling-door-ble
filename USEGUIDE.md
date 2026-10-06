@@ -139,11 +139,16 @@ Giai đoạn 4, số đo từng bước (bản release có log, 8 lần): connec
 
 Cách đo: app cài bằng `adb install` chạy chưa biên dịch (`run-from-apk`), chậm gấp khoảng 3 lần. Trước khi đo phải chạy `adb shell cmd package compile -m speed -f com.trananh.rollingdoor`, rồi bỏ lần mở đầu tiên. Bản release không có log `DoorTiming`, nên đo bằng log hệ thống: `Start proc` của `ActivityManager` và `connect()`, `onClientConnectionState()` của `BluetoothGatt`.
 
+Giai đoạn 4, số đo sau khi chạy `DoorLink.open()` trên `Dispatchers.Default` (commit `004cbc8`, tablet SM-T225, bản debug, 8 lần): có kết nối rồi chỉ còn chờ main 2–3 ms, trước là 18–305 ms. Discover 623–681 ms, chậm hơn trước vì bảng GATT có thêm `BUTTONS`; kết nối 162–786 ms.
+
+Vì sao discover lâu (log `bt_bta_gattc` của tablet và serial log của board): tablet mở kết nối ở chu kỳ 48,75 ms, khoảng 445 ms sau mới đổi sang 7,5 ms để discover, rồi 15 ms khi app xin ưu tiên cao. Trước khi đổi, mỗi lượt hỏi đáp ATT mất khoảng 96 ms; sau khi đổi khoảng 15 ms. Khoảng 445 ms là do Android chạy lần lượt các thủ tục LL (đọc tính năng, phiên bản, rồi cập nhật thông số chờ tới instant), board không rút ngắn được. Android cũng không dùng cache GATT cho board: log ghi `Device LMP version 0x09 < Bluetooth 5.1. Ignore database cache read`, tức cache theo Database Hash chỉ dùng cho thiết bị từ Bluetooth 5.1, mà ESP32-S3 là 5.0. Bật `CONFIG_BT_NIMBLE_GATT_CACHING` không giúp được.
+
+Giai đoạn 4, board tự xin MTU 255 ngay trong `onConnect`: chạy song song với discover của Android chứ không chặn nó, và với MTU lớn thì mỗi lượt đọc được nhiều characteristic 128-bit hơn. Số đo (cùng cách, 8 lần): discover 562–604 ms, setup 653–744 ms, trước là 699–798 ms, tức nhanh hơn khoảng 60 ms. Ghép đôi và sửa nút (lệnh `0C`, cần MTU lớn) vẫn chạy. Bản debug cho tổng thời gian tới sẵn sàng tăng, vì discover xong sớm hơn nên trùng lúc main đang vẽ màn đầu (bản debug vẽ chậm khoảng 5 lần); muốn đo tổng phải dùng bản release.
+
 Việc còn lại, làm cuối giai đoạn 4:
 
-- Có kết nối rồi còn chờ main vẽ màn đầu, thường khoảng 0,27 giây. Hướng sửa dự kiến: chạy `DoorLink.open()` trên một dispatcher nền. `GattClient` và `DoorLink` đã an toàn khi gọi từ luồng khác, chỉ phần trạng thái của `DoorConnection` mới cần ở lại main.
-- Discover mất 0,36–0,62 giây, là bước lâu nhất. Việc này nằm phía radio và firmware: ESP xin chu kỳ kết nối ngắn ngay khi vừa kết nối, và xem có bớt được service, characteristic trong bảng GATT không (Android discover lại toàn bộ mỗi lần vì không bond nên không cache).
-- Kết nối dao động 0,13–0,58 giây không phải do chu kỳ quảng bá: board đã quảng bá 20–30 ms (nhánh `esp32`, commit `a82a387`) mà số đo không đổi. Cần xem thông số kết nối phía Android (HCI snoop log).
+- Discover vẫn khoảng 0,58 giây, phần lớn là chờ Android đổi chu kỳ. Muốn bỏ hẳn bước này thì phải bond, vì Android chỉ cache GATT cho thiết bị đã bond (đang soạn thiết kế).
+- Kết nối dao động 0,13–0,79 giây không phải do chu kỳ quảng bá: board đã quảng bá 20–30 ms (nhánh `esp32`, commit `a82a387`) mà số đo không đổi. Cần xem thông số kết nối phía Android (HCI snoop log).
 
 Giai đoạn 6, đã làm (nhánh `esp32`): thay lớp RF giả bằng `rc-switch`, phát lặp 10 lần mỗi lệnh. Học mã qua lệnh serial `rf learn <nút>`: mạch thu chỉ bật lúc học, giải mã được cùng một mã hai lần liên tiếp mới lưu vào NVS (namespace `rf`), log không in giá trị mã. Nút chưa có mã thì lệnh trả `03`. `rf verify` phát từng mã đã học rồi cho mạch thu của board tự giải lại, so với mã đã lưu, để chắc mạch phát phát đúng mã của nút đã bấm trên remote (cũng cảnh báo nếu hai nút trùng mã). Lệnh kiểm tra phần cứng: `rf selftest` (như trên nhưng với mã giả) và `rf scan` (đếm xung trên chân thu).
 

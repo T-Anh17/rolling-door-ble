@@ -35,7 +35,15 @@ void post(Event::Type type, uint16_t connHandle, const uint8_t* data = nullptr, 
 class ServerCallbacks : public NimBLEServerCallbacks {
   // The phone picks the connection interval and changes it itself (~49ms at first, then 7.5ms
   // a few hundred ms later); asking from here only arrives after that, so the board just logs it.
+  //
+  // The board asks for a large MTU itself, right away: it runs alongside the phone's service
+  // discovery instead of before it, and discovery then needs fewer requests (one characteristic
+  // with a 128-bit UUID per response at the default MTU).
   void onConnect(NimBLEServer*, NimBLEConnInfo& connInfo) override {
+    const int rc = ble_gattc_exchange_mtu(connInfo.getConnHandle(), nullptr, nullptr);
+    if (rc != 0) {
+      Serial.printf("[BLE] MTU exchange not started, rc %d\n", rc);
+    }
     Serial.printf("[BLE] connected %s, interval %.2fms\n", connInfo.getAddress().toString().c_str(),
                   connInfo.getConnInterval() * 1.25f);
     post(Event::Type::Connected, connInfo.getConnHandle());
