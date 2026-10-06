@@ -31,7 +31,7 @@ fun PrimaryButton(
     enabled: Boolean = true,
     loading: Boolean = false,
 ) {
-    FilledButton(text, onClick, modifier, icon, enabled, loading, DoorTheme.colors.accent, DoorTheme.colors.onAccent)
+    FilledButton(text, onClick, modifier, icon, enabled, loading, DoorTheme.colors.accentFill, DoorTheme.colors.onAccent)
 }
 
 // Tinted button: accent at 12% behind accent text.

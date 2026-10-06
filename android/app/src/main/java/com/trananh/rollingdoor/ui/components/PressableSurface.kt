@@ -58,6 +58,15 @@ fun PressableSurface(
 
     Box(
         modifier = modifier
+            // Before the minimum size, so the clickable node itself is 48dp: accessibility
+            // services and Accessibility Scanner see the real touch area.
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+                role = role,
+                onClick = onClick,
+            )
             .minimumInteractiveComponentSize()
             .graphicsLayer {
                 scaleX = scale.value
@@ -65,14 +74,7 @@ fun PressableSurface(
                 this.alpha = alpha.value * if (dimmed) DoorMotion.DISABLED_ALPHA else 1f
             }
             .clip(shape)
-            .background(if (pressed && pressedColor != null) pressedColor else color)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                enabled = enabled,
-                role = role,
-                onClick = onClick,
-            ),
+            .background(if (pressed && pressedColor != null) pressedColor else color),
         contentAlignment = contentAlignment,
         content = content,
     )
