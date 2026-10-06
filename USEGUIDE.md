@@ -112,7 +112,7 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 | 4 | Hoàn thiện: dưới 1 giây từ lúc mở đến sẵn sàng, xử lý mất kết nối, trạng thái nguồn | Chưa |
 | 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
 | 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, lắp pin và mạch phát hiện điện lưới | Đang làm |
-| 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Đang làm |
+| 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Xong |
 
 Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh). Giai đoạn 4 và 6 chưa xong.
 
@@ -155,7 +155,7 @@ Giai đoạn 6, nút tùy chỉnh (firmware ở nhánh `esp32`, app ở nhánh `
 
 Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), mạch phát hiện điện lưới và đo pin.
 
-Giai đoạn 7, đã làm (firmware ở nhánh `esp32`, app ở nhánh `android`):
+Giai đoạn 7, xong (firmware ở nhánh `esp32`, app ở nhánh `android`):
 
 - Lệnh mới: `08` Rời board (máy nào cũng gửi được, board xóa ô của chính máy gửi, không nhận key id), `0E` Xem danh sách máy (máy nào cũng gửi được), `0F` Đổi tên máy `[key id][tên 0–32 byte]` (admin đổi mọi máy, máy thường chỉ đổi tên chính nó), `10` Chuyển quyền admin `[key id]` (admin cũ thành máy thường). Characteristic mới `PHONES` (`…0008`, chỉ đọc): rỗng cho tới khi kết nối đó gửi `0E`; kết nối khác đọc ra rỗng.
 - Tên máy lưu trong NVS cùng namespace `keys`, key `n0`–`n7`, không đổi blob `Slot` nên các máy đã ghép đôi giữ nguyên khóa. Ghép đôi xong, app gửi `0F` đặt tên theo tên thiết bị trong Cài đặt Android. Máy chưa có tên thì app hiện "Điện thoại <số ô + 1>".
