@@ -41,7 +41,7 @@ void rotateChallenge(uint16_t connHandle);
 // Notifies STATUS with [command][result] to this connection.
 void notifyStatus(uint16_t connHandle, uint8_t command, Result result);
 
-// Sets INFO to [power source][battery percent][learned RF buttons][button list revision]
+// Sets INFO to [00][battery percent][learned RF buttons][button list revision]
 // and notifies it to every connection.
 void setInfo(uint8_t powerSource, uint8_t batteryPercent, uint8_t learnedMask, uint8_t revision);
 

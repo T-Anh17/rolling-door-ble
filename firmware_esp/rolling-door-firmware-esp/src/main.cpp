@@ -14,8 +14,11 @@
 
 namespace {
 
+// INFO's first byte once said mains or battery; the board no longer tells them apart.
+constexpr uint8_t kInfoMains = 0x00;
+
 bool pairingAdvertised = false;
-power::Status reportedPower = {power::Source::Mains, power::kBatteryUnknown};
+uint8_t reportedBattery = power::kBatteryUnknown;
 uint8_t reportedLearned = 0;
 uint8_t reportedRevision = 0;
 
@@ -25,14 +28,14 @@ struct PhoneLearning {
   uint16_t connHandle;
 } phoneLearning = {};
 
-// Notifies INFO whenever the power status, the learned buttons or the button list change.
+// Notifies INFO whenever the battery, the learned buttons or the button list change.
 // A phone that connects later reads it. BUTTONS is updated first, so a phone that reads it
 // right after the INFO notify gets the new list.
 void updateInfo(bool force = false) {
-  const power::Status status = power::read();
+  const uint8_t battery = power::batteryPercent();
   const uint8_t learned = rf::learnedMask();
   const uint8_t revision = remote_buttons::revision();
-  if (!force && status == reportedPower && learned == reportedLearned &&
+  if (!force && battery == reportedBattery && learned == reportedLearned &&
       revision == reportedRevision) {
     return;
   }
@@ -40,10 +43,10 @@ void updateInfo(bool force = false) {
     uint8_t buttons[remote_buttons::kSerializedMax];
     ble::setButtons(buttons, remote_buttons::serialize(buttons, sizeof(buttons)));
   }
-  reportedPower = status;
+  reportedBattery = battery;
   reportedLearned = learned;
   reportedRevision = revision;
-  ble::setInfo(static_cast<uint8_t>(status.source), status.batteryPercent, learned, revision);
+  ble::setInfo(kInfoMains, battery, learned, revision);
 }
 
 // Tells the admin phone how learning ended: 00 saved, 03 timed out or cancelled from the
@@ -341,6 +344,7 @@ void loop() {
       break;
   }
 
+  power::poll();
   const rf::LearnOutcome outcome = rf::poll();
   // INFO first: the phone already sees the new learned buttons when STATUS 81 arrives.
   updateInfo();
