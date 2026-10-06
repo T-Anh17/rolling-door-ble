@@ -62,7 +62,7 @@ class PairingSession(
         var saved = false
         var confirmed = false
         try {
-            link.open()
+            link.open(largeMtu = true)
 
             onProgress(PairingProgress.ExchangingKey)
             val crypto = withContext(Dispatchers.Default) { PairingCrypto() }

@@ -144,6 +144,17 @@ class GattClient(
         }
     }
 
+    // Asks for a short connection interval (11.25-15 ms) until the link closes. Not a queued GATT
+    // operation and no public callback, so it returns at once; false if Android refused.
+    fun requestHighPriority(): Boolean {
+        val g = gatt?.takeIf { connected } ?: return false
+        return try {
+            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+        } catch (e: SecurityException) {
+            throw BleException(LinkError.NoPermission, e.message ?: "BLUETOOTH_CONNECT missing")
+        }
+    }
+
     suspend fun requestMtu(mtu: Int): Int = execute(Op.Mtu) { it.requestMtu(mtu) } as Int
 
     suspend fun discoverServices() {

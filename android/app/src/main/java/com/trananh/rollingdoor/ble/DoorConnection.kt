@@ -6,6 +6,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
+import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.trananh.rollingdoor.crypto.CommandSigner
 import com.trananh.rollingdoor.data.SavedDevice
@@ -63,6 +66,10 @@ class DoorConnection(
     private var loopJob: Job? = null
     private var link: DoorLink? = null // set while Ready or Busy
 
+    // Timing logs for the launch-to-ready target, debug builds only.
+    private val logTiming = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+    private var startedAt = 0L // first attempt after start() measures from here
+
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
@@ -78,6 +85,7 @@ class DoorConnection(
     fun start() {
         if (started) return
         started = true
+        startedAt = SystemClock.elapsedRealtime()
         // Registered in code and only while started: nothing wakes the app when it is closed.
         ContextCompat.registerReceiver(
             context,
@@ -144,17 +152,21 @@ class DoorConnection(
         try {
             while (true) {
                 _state.value = ConnectionState.Connecting
+                val attemptAt = SystemClock.elapsedRealtime()
+                var waited = false
                 // Direct first, also right after a drop: the ESP32 may just have restarted.
                 val opened = try {
                     open(autoConnect = false, timeoutMs = DIRECT_TIMEOUT_MS)
                 } catch (e: BleException) {
                     if (e.error !in OUT_OF_RANGE_ERRORS) throw e
                     _state.value = ConnectionState.WaitingInRange
+                    waited = true
                     open(autoConnect = true, timeoutMs = null)
                 }
                 try {
                     link = opened
                     _state.value = ConnectionState.Ready
+                    if (logTiming) logReady(opened, attemptAt, waited)
                     opened.awaitDown()
                 } finally {
                     if (link === opened) link = null
@@ -170,6 +182,20 @@ class DoorConnection(
         }
     }
 
+    // Filter logcat by tag DoorTiming. "since start" counts from start(), so it includes the
+    // time from onStart to the first connect() call; later reconnects count from their attempt.
+    private fun logReady(opened: DoorLink, attemptAt: Long, waited: Boolean) {
+        val now = SystemClock.elapsedRealtime()
+        val since = if (startedAt != 0L) "since start" else "since attempt"
+        val from = if (startedAt != 0L) startedAt else attemptAt
+        startedAt = 0L
+        Log.d(
+            TIMING_TAG,
+            "ready ${now - from} ms $since: connect ${opened.connectMs} ms, " +
+                "setup ${opened.setupMs} ms" + if (waited) ", after waiting in range" else "",
+        )
+    }
+
     private suspend fun open(autoConnect: Boolean, timeoutMs: Long?): DoorLink {
         val opening = DoorLink(context, adapter.getRemoteDevice(device.mac))
         try {
@@ -183,6 +209,7 @@ class DoorConnection(
 
     private companion object {
         const val DIRECT_TIMEOUT_MS = 4_000L
+        const val TIMING_TAG = "DoorTiming"
 
         // What a direct attempt reports when the device is out of range or restarting
         // (including status 133, which arrives as ConnectFailed).
