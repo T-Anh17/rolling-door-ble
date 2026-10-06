@@ -2,11 +2,11 @@
 
 Control a 433MHz rolling door from an Android phone over Bluetooth Low Energy.
 
-An ESP32-S3 sits near the door and replays the fixed codes of the original RF remote. The Android app connects to it over BLE as soon as it opens and shows the same four buttons as the remote: Up, Down, Lock, Unlock.
+An ESP32-S3 sits near the door and replays the fixed codes of the original RF remote. The Android app connects to it over BLE as soon as it opens and shows the same four buttons as the remote: Up, Down, Lock, Unlock. The admin can add buttons (up to eight), rename them, change their icon and learn a code for each.
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only). The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Next is phase 4: under 1 second from launch to ready. See [Roadmap](#roadmap).
+> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; real RF is in progress (phase 6): codes are learned from the remote in the admin phone's Settings (or over the serial console) and replayed with `rc-switch`. The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Phase 4 in progress: the app shows a power outage from `INFO` (fake values for now); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
 
 > **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
@@ -27,7 +27,7 @@ Android app  ⇄  BLE (GATT)  ⇄  ESP32-S3  →  433MHz transmitter  →  door 
 |---|---|
 | LilyGO T-Display-S3 | ESP32-S3 board, display removed |
 | MX-433 kit: FS1000A transmitter | Powered from 5V. Replays the remote's codes. Needs a 17.3cm wire antenna |
-| MX-433 kit: XY-MK-5V receiver | Powered from 5V. Only used once, to learn the codes from the remote |
+| MX-433 kit: XY-MK-5V (MX-05V) receiver | Powered from 5V. Only used once, to learn the codes from the remote |
 | 5V USB-C adapter | Main power |
 | 3.7V LiPo cell, JST 1.25mm | Backup power, for status reporting only |
 | 10kΩ and 20kΩ resistors, two of each | Voltage dividers: receiver DATA to GPIO, and mains power detection |
@@ -44,13 +44,13 @@ Both RF modules run from the board's 5V pin. The ESP32-S3 GPIOs are 3.3V only, s
 LilyGO T-Display-S3                    FS1000A (transmitter)
   5V   ──────────────────────────────  VCC
   GND  ──────────────────────────────  GND
-  GPIO (RF TX) ──────────────────────  DATA
+  GPIO13 (RF TX) ────────────────────  DATA
                                        ANT ── 17.3cm wire
 
 LilyGO T-Display-S3                    XY-MK-5V (receiver)
   5V   ──────────────────────────────  VCC
   GND  ──────────────────────────────  GND
-  GPIO (RF RX) ──┬──── 10kΩ ─────────  DATA
+  GPIO12 (RF RX) ┬──── 10kΩ ─────────  DATA
                  │
                 20kΩ
                  │
@@ -60,7 +60,7 @@ On-board buttons: BOOT = GPIO0 (hold 3 s: open pairing), KEY = GPIO14 (hold 10 s
 USB-C: 5V adapter          JST 1.25mm: 3.7V LiPo cell
 ```
 
-The RF and mains detection GPIO numbers are chosen in phase 6 and will be listed here and in `src/config.h`. Until then the firmware uses a fake RF layer and nothing needs to be connected.
+RF uses GPIO13 (transmitter DATA) and GPIO12 (receiver DATA, through the divider), set in `src/config.h`. The mains detection GPIO is chosen later in phase 6. The board's 5V pin is only live on USB power, so the RF modules are off while the board runs on the LiPo cell.
 
 ## Repository layout
 
@@ -82,23 +82,30 @@ One custom GATT service with five characteristics. The device advertises as `Rol
 |---|---|---|---|
 | Service | `a7930001-966e-4240-b881-5c2e2f2203a8` | | |
 | `CHALLENGE` | `a7930002-966e-4240-b881-5c2e2f2203a8` | read, notify | 16-byte random nonce, replaced after every command and pairing request |
-| `COMMAND` | `a7930003-966e-4240-b881-5c2e2f2203a8` | write | `[key id][command][args 0–16 bytes][mac 16 bytes]` |
-| `STATUS` | `a7930004-966e-4240-b881-5c2e2f2203a8` | notify | `[command][result]`; `80` as the command means a pairing request |
-| `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[power source][battery percent]` |
+| `COMMAND` | `a7930003-966e-4240-b881-5c2e2f2203a8` | write | `[key id][command][args 0–34 bytes][mac 16 bytes]`; only `0C` is longer than the default MTU allows, and the app asks for a larger MTU before sending it |
+| `STATUS` | `a7930004-966e-4240-b881-5c2e2f2203a8` | notify | `[command][result]`; `80` as the command means a pairing request, `81` the end of RF learning |
+| `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[power source: 00 mains, 01 battery][battery percent: 0–100, FF not measured][learned buttons: bit n = button n + 1][button list revision]`, notified when it changes |
 | `PAIRING` | `a7930006-966e-4240-b881-5c2e2f2203a8` | read, write | Key exchange, see [Pairing](#pairing) |
+| `BUTTONS` | `a7930007-966e-4240-b881-5c2e2f2203a8` | read | `[revision]` then, per button in display order, `[id 1–8][icon][name length 0–32][name UTF-8]` (a long read, up to 281 bytes) |
 
 `mac = HMAC-SHA256(phone key, nonce ‖ command ‖ args)`, first 16 bytes. The nonce changes after every frame, accepted or not, so a captured frame cannot be replayed.
 
 | Command | Function | Allowed for |
 |---|---|---|
 | `00` | Ping: no action; confirms a new pairing and checks that a key still works | Any paired phone |
-| `01` | Up | Any paired phone |
-| `02` | Down | Any paired phone |
-| `03` | Lock (stops a moving door) | Any paired phone |
-| `04` | Unlock | Any paired phone |
+| `01`–`04` | Press buttons 1–4 (Up, Down, Lock, Unlock on a new board), kept for older apps | Any paired phone |
 | `05` | Enter OTA update mode (not implemented until phase 5) | Admin |
 | `06` | Open pairing for 60 seconds | Admin |
 | `07` | Revoke a phone, args: `[key id]` (an admin cannot revoke itself) | Admin |
+| `09` | Learn an RF code, args: `[01–08]` the button, or `[00]` to cancel. `00` means the receiver is listening, `03` that it is busy; the end comes later as `STATUS` `81 00` (saved) or `81 03` (no code within 15 s) | Admin |
+| `0A` | Clear an RF code, args: `[01–08]` the button (`03` while learning) | Admin |
+| `0B` | Press a button, args: `[01–08]`. `01` if there is no such button, `03` if it has no code or the receiver is busy | Any paired phone |
+| `0C` | Add a button or change it, args: `[id 01–08][icon][name UTF-8, 0–32 bytes]`. A new button goes at the end of the list | Admin |
+| `0D` | Delete a button and its RF code, args: `[01–08]` (`03` while learning) | Admin |
+
+`08` is reserved for phase 7. Learning stops when the admin phone disconnects or sends `09 00`; neither is reported with `81`.
+
+**Buttons.** The board keeps up to eight buttons in NVS, each with an id (1–8, also the slot of its RF code), an icon and a name. A new board starts with Up, Down, Lock and Unlock as buttons 1–4, with empty names. Icons are `00` Up, `01` Down, `02` Lock, `03` Unlock, `04` Stop, `05` Gate, `06` Garage, `07` Light, `08` Power, `09` Bell; the app draws them, and a button with an empty name shows its icon's name in the phone's language. Every change to the list (`0C`, `0D`) bumps the revision in `INFO`, which the board notifies before the command's `STATUS`. The app keeps the last list it read and reads `BUTTONS` again only when the revision differs, so the buttons show before it connects and the list costs nothing on a normal launch. Names are readable by anyone who connects, like `INFO`.
 
 | Result | Meaning |
 |---|---|
@@ -141,7 +148,11 @@ Requires [PlatformIO](https://platformio.org/). From `firmware_esp/rolling-door-
 pio run -t upload && pio device monitor
 ```
 
-The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds) and `wipe` (erase all phone keys).
+The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) `power mains|battery [0-100]` (set the fake power status in `INFO` until phase 6 measures it), `buttons` (list the buttons with icon and name) and `rf` (learn and test the remote's codes, see below).
+
+The admin phone learns the codes from Settings, **Buttons** (see [Android app](#android-app)). Over the serial console, type `rf learn 1` and hold the remote's Up button a few centimetres from the receiver; the code is saved once it is received twice in a row (15 s timeout, `rf cancel` stops early). Repeat for buttons `2`, `3` and `4` (Down, Lock, Unlock on a new board). Codes learned before buttons had ids are moved to buttons 1–4 on the first boot. `rf list` shows which buttons are learned (protocol, bit count and pulse length, never the code), `rf send <button>` transmits a code without the app, and `rf clear [button]` erases one or all codes. `rf verify` sends each learned code and decodes it with the board's own receiver, to check that the board transmits exactly the code of that remote button (it also warns if two buttons were learned with the same code). Two more commands check the hardware: `rf selftest` does the same with a made-up code, and `rf scan` logs the receiver's edge counts for 10 seconds while a remote button is pressed.
+
+Codes are transmitted with `rc-switch` but decoded by the firmware: the cheap receiver loses a short pulse in some frames, which makes `rc-switch` drop the whole frame, so the firmware decodes protocol 1 (PT2262, EV1527 and similar, 1:3 pulses with a 1:31 sync) itself and puts a lost pulse back. A rolling-code remote cannot be learned. Pressing a button with no code returns `03` (RF error).
 
 ### Android app
 
@@ -157,7 +168,7 @@ BLE does not work in the emulator; use a real device.
 
 The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.
 
-Once paired, the app opens straight on the control screen: the connection status and the four buttons, nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone** for the admin, and **Forget device**, which removes the key from this phone only. The phone's slot stays in the device's key table; if the admin forgets the device, no phone is left with admin rights until the keys are erased with KEY. Phase 7 fixes this with a command that lets a phone leave and free its own slot.
+Once paired, the app opens straight on the control screen: the connection status and the buttons (two per row, up to eight, never scrolling), nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone**, **Add watch** (a placeholder until the Wear OS app exists) and **Buttons** for the admin, and **Forget device**, which removes the key from this phone only. Buttons lists the device's buttons and whether it has a code for each, with **Add button** while there are fewer than eight. A button's page sets its name and icon (**Save**), learns its code (tap **Learn code**, then hold the button on the remote close to the device, within 15 seconds; the receiver must be wired), clears the code, or deletes the button with its code. A new button is saved first, then learned. Every paired phone sees the same buttons. The phone's slot stays in the device's key table; if the admin forgets the device, no phone is left with admin rights until the keys are erased with KEY. Phase 7 fixes this with a command that lets a phone leave and free its own slot.
 
 The app follows the phone's language: Vietnamese on a Vietnamese phone, English otherwise. On Android 13 and newer it can also be set for this app alone in the system's app language setting.
 
@@ -192,7 +203,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [x] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
 - [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, power status in the app
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
-- [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, fit battery and mains detection
+- [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, buttons the admin can add, edit and delete (up to eight), fit battery and mains detection
 - [ ] **Phase 7 – More phones:** admin UI to add, rename and revoke phones; a phone that forgets the device leaves and frees its slot
 
 ## Security notes

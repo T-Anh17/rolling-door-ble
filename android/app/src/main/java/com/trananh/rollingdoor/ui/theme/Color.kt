@@ -4,9 +4,10 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 // iOS system colors. Accent is the only brand color: primary buttons, links, active states.
-// red / green / orange mark status only, never decoration. The exception is the four remote
-// buttons, which each get a color, in pairs: Up / Down cool (blue, indigo), Lock / Unlock
-// red and green (Lock also stops a moving door).
+// red / green / orange mark status only, never decoration. The exception is the remote
+// buttons, whose color follows their icon: Up / Down cool (blue, indigo), Lock / Unlock red and
+// green (Lock also stops a moving door). The other icons use darker shades of iOS colors, the
+// same in both modes, so the white icon on them stays above 3:1.
 // Darker than iOS where text or icons would fall below WCAG contrast: accent and accentFill
 // (white text 5.8:1), secondaryLabel (4.8:1 on the light page), red text, Unlock's circle.
 @Immutable
@@ -29,6 +30,12 @@ data class DoorColors(
     val down: Color,
     val lock: Color,
     val unlock: Color,
+    val stop: Color,
+    val gate: Color,
+    val garage: Color,
+    val light: Color,
+    val power: Color,
+    val bell: Color,
 )
 
 val LightDoorColors = DoorColors(
@@ -50,6 +57,12 @@ val LightDoorColors = DoorColors(
     down = Color(0xFF5856D6),
     lock = Color(0xFFFF3B30),
     unlock = Color(0xFF248A3D),
+    stop = Color(0xFFC93400),
+    gate = Color(0xFF00788A),
+    garage = Color(0xFF7F6545),
+    light = Color(0xFFA36F00),
+    power = Color(0xFF6C6C70),
+    bell = Color(0xFFD30F45),
 )
 
 val DarkDoorColors = DoorColors(
@@ -71,6 +84,12 @@ val DarkDoorColors = DoorColors(
     down = Color(0xFF5E5CE6),
     lock = Color(0xFFFF453A),
     unlock = Color(0xFF248A3D),
+    stop = Color(0xFFC93400),
+    gate = Color(0xFF00788A),
+    garage = Color(0xFF7F6545),
+    light = Color(0xFFA36F00),
+    power = Color(0xFF6C6C70),
+    bell = Color(0xFFD30F45),
 )
 
 // iOS elevated palette, for sheets and dialogs: in dark mode each surface is one step lighter,

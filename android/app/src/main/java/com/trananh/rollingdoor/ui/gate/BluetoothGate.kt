@@ -247,6 +247,9 @@ private fun BluetoothGate.content(): GateText {
     }
 }
 
+// Outside Compose: whether the saved device may be connected to without asking first.
+fun Context.canConnectToSavedDevice(): Boolean = hasAll(bluetoothPermissions(forPairing = false))
+
 private fun bluetoothPermissions(forPairing: Boolean): Array<String> = when {
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
         arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)

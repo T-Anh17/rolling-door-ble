@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Rolling Door</string>
+    <string name="app_name">Rolling Door Control</string>
 
     <!-- Bluetooth gate -->
     <string name="gate_permission_title">Allow nearby devices</string>
@@ -64,7 +64,7 @@
     <string name="scanner_torch">Flashlight</string>
 
     <!-- Control -->
-    <string name="control_title">Rolling door</string>
+    <string name="control_title">Rolling door control</string>
     <string name="control_up">Up</string>
     <string name="control_down">Down</string>
     <string name="control_lock">Lock</string>
@@ -74,17 +74,24 @@
     <string name="control_status_out_of_range">Out of range</string>
     <string name="control_status_bluetooth_off">Bluetooth is off</string>
     <string name="control_status_failed">Cannot connect</string>
+    <string name="control_status_power_out">Power outage</string>
     <string name="control_retry_now">Try now</string>
     <string name="control_hint_out_of_range">Connects by itself when you are near the door.</string>
     <string name="control_hint_failed">Check that the device has power, then try again.</string>
     <string name="control_hint_unsupported">The device firmware does not match the app.</string>
+    <string name="control_hint_power_out">The door cannot move without power.</string>
+    <string name="control_hint_power_out_battery">The door cannot move without power. Device battery: %1$d%%.</string>
     <string name="control_message_pairing_opened">Pairing is open for 60 seconds. Scan the QR code on the new phone to connect.</string>
     <string name="control_message_no_reply">The door did not answer. Check the door before trying again.</string>
     <string name="control_message_key_rejected">The device no longer accepts this phone. Pair it again.</string>
     <string name="control_message_locked_out">Too many failed attempts. Wait 1 minute and try again.</string>
-    <string name="control_message_rf_failed">Could not send the signal to the door.</string>
+    <string name="control_message_not_learned">This button has not been learned yet.</string>
+    <string name="control_message_rf_busy">The device is busy. Try again in a moment.</string>
     <string name="control_message_not_permitted">Only the admin phone can do this.</string>
     <string name="control_message_unexpected">The device sent an invalid response.</string>
+    <string name="control_empty">No buttons yet</string>
+    <string name="control_empty_admin">Add buttons in Settings.</string>
+    <string name="control_empty_normal">Ask the admin phone to add buttons.</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -93,11 +100,51 @@
     <string name="settings_address">Address</string>
     <string name="settings_role">Role</string>
     <string name="settings_role_admin">Admin</string>
-    <string name="settings_role_normal">Member</string>
     <string name="settings_section_admin">Admin</string>
     <string name="settings_add_phone">Add phone</string>
-    <string name="settings_add_phone_footer">Opens pairing for 60 seconds. Scan the QR code on the new phone within that time.</string>
+    <string name="settings_add_watch">Add watch</string>
+    <string name="settings_coming_soon">Coming soon</string>
     <string name="settings_forget_title">Forget device?</string>
     <string name="settings_forget_body">This phone will not control the door until it pairs again with the QR code.</string>
     <string name="settings_cancel">Cancel</string>
+    <string name="settings_quick_tile">Add to Quick Settings</string>
+    <string name="settings_quick_tile_added">Added</string>
+    <string name="settings_quick_tile_footer">The tile opens the app, it does not send commands.</string>
+    <string name="buttons_title">Buttons</string>
+    <string name="buttons_add">Add button</string>
+    <string name="buttons_footer">Up to 8 buttons. Every paired phone sees the same buttons.</string>
+    <string name="buttons_full_footer">All 8 buttons are in use. Delete one to add another.</string>
+    <string name="buttons_done">Done</string>
+    <string name="button_stop">Stop</string>
+    <string name="button_gate">Gate</string>
+    <string name="button_garage">Garage</string>
+    <string name="button_light">Light</string>
+    <string name="button_power">Power</string>
+    <string name="button_bell">Bell</string>
+    <string name="edit_title_new">New button</string>
+    <string name="edit_title">Edit button</string>
+    <string name="edit_name">Name</string>
+    <string name="edit_name_footer">Leave empty to use the icon\'s name.</string>
+    <string name="edit_icon">Icon</string>
+    <string name="edit_save">Save</string>
+    <string name="edit_save_failed">Could not save. Try again.</string>
+    <string name="edit_save_first">Save the button first, then learn its code.</string>
+    <string name="edit_delete">Delete button</string>
+    <string name="delete_title">Delete button?</string>
+    <string name="delete_body">%1$s and its learned code will be removed from the device.</string>
+    <string name="delete_failed">Could not delete. Try again.</string>
+    <string name="learn_header">Remote code</string>
+    <string name="learn_start">Learn code</string>
+    <string name="learn_learned">Learned</string>
+    <string name="learn_not_learned">Not learned</string>
+    <string name="learn_hint">Tap Learn code, then hold the button on the remote close to the device. It listens for 15 seconds.</string>
+    <string name="learn_listening">Listening. Hold the button on the remote close to the device.</string>
+    <string name="learn_result_learned">Code learned. Try it on the control screen.</string>
+    <string name="learn_result_not_heard">No code heard. Hold the remote closer to the device and try again.</string>
+    <string name="learn_result_busy">The receiver on the device is busy. Try again in a moment.</string>
+    <string name="learn_result_failed">Could not learn the code. Try again.</string>
+    <string name="learn_clear">Clear code</string>
+    <string name="learn_result_cleared">Code cleared.</string>
+    <string name="learn_result_clear_failed">Could not clear the code. Try again.</string>
+    <string name="tile_label">Rolling door control</string>
 </resources>

@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,7 +37,8 @@ enum class ListRowStyle { Normal, Destructive }
 class ListGroupScope internal constructor() {
     internal val rows = mutableListOf<ListRowSpec>()
 
-    // onClick = null makes a read-only row (no press feedback).
+    // onClick = null makes a read-only row (no press feedback). action adds a second tap
+    // target at the end of the row, separate from the row itself.
     fun row(
         title: String,
         icon: ImageVector? = null,
@@ -42,11 +47,24 @@ class ListGroupScope internal constructor() {
         style: ListRowStyle = ListRowStyle.Normal,
         loading: Boolean = false,
         enabled: Boolean = true,
+        action: ListRowAction? = null,
         onClick: (() -> Unit)? = null,
     ) {
-        rows += ListRowSpec(title, icon, value, chevron, style, loading, enabled, onClick)
+        rows += ListRowSpec(title, icon, value, chevron, style, loading, enabled, action, onClick)
     }
 }
+
+// A button at the end of a row: an icon, or an icon and text. label is read by TalkBack. While
+// loading, a spinner takes the button's place.
+class ListRowAction(
+    val icon: ImageVector,
+    val label: String,
+    val text: String? = null,
+    val style: ListRowStyle = ListRowStyle.Normal,
+    val loading: Boolean = false,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit,
+)
 
 internal class ListRowSpec(
     val title: String,
@@ -56,6 +74,7 @@ internal class ListRowSpec(
     val style: ListRowStyle,
     val loading: Boolean,
     val enabled: Boolean,
+    val action: ListRowAction?,
     val onClick: (() -> Unit)?,
 )
 
@@ -116,7 +135,14 @@ private fun ListRow(row: ListRowSpec) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
-                .padding(horizontal = DoorTheme.spacing.m, vertical = DoorTheme.spacing.s),
+                .padding(
+                    start = DoorTheme.spacing.m,
+                    // The action's 48dp touch area fills the row height, and its icon ends
+                    // where values and chevrons end in other rows.
+                    end = if (row.action == null) DoorTheme.spacing.m else DoorTheme.spacing.m - ACTION_INSET,
+                    top = if (row.action == null) DoorTheme.spacing.s else 0.dp,
+                    bottom = if (row.action == null) DoorTheme.spacing.s else 0.dp,
+                ),
             horizontalArrangement = Arrangement.spacedBy(DoorTheme.spacing.s),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -133,6 +159,7 @@ private fun ListRow(row: ListRowSpec) {
                 )
             }
             if (row.loading) Spinner()
+            if (row.action != null) RowAction(row.action)
             if (row.chevron) {
                 Icon(
                     Icons.AutoMirrored.Rounded.KeyboardArrowRight,
@@ -158,6 +185,34 @@ private fun ListRow(row: ListRowSpec) {
 }
 
 @Composable
+private fun RowAction(action: ListRowAction) {
+    val colors = DoorTheme.colors
+    if (action.loading) {
+        Box(Modifier.size(ACTION_SIZE), contentAlignment = Alignment.Center) { Spinner() }
+        return
+    }
+    val tint = if (action.style == ListRowStyle.Destructive) colors.red else colors.accent
+    PressableSurface(
+        onClick = action.onClick,
+        modifier = Modifier
+            .heightIn(min = ACTION_SIZE)
+            .widthIn(min = ACTION_SIZE)
+            .semantics { contentDescription = action.label },
+        enabled = action.enabled,
+    ) {
+        Row(
+            Modifier.padding(horizontal = ACTION_INSET),
+            horizontalArrangement = Arrangement.spacedBy(DoorTheme.spacing.xs / 2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val iconSize = if (action.text == null) ICON_SIZE else 20.dp
+            Icon(action.icon, contentDescription = null, tint = tint, modifier = Modifier.size(iconSize))
+            if (action.text != null) Text(action.text, style = DoorTheme.type.body, color = tint)
+        }
+    }
+}
+
+@Composable
 private fun Separator(start: Dp, end: Dp) {
     Box(
         Modifier
@@ -175,6 +230,8 @@ private fun textStart(hasIcon: Boolean): Dp {
 }
 
 private val ICON_SIZE = 24.dp
+private val ACTION_SIZE = 48.dp
+private val ACTION_INSET = (ACTION_SIZE - ICON_SIZE) / 2
 
 @DoorPreviews
 @DoorFontScalePreview
@@ -183,6 +240,12 @@ private fun ListGroupPreview() = PreviewColumn {
     ListGroup(header = "Thiết bị") {
         row("Địa chỉ", value = "24:6F:28:A1:B2:C3")
         row("Vai trò", value = "Quản trị")
+    }
+    ListGroup {
+        val clear = ListRowAction(Icons.Rounded.Delete, "Xóa", style = ListRowStyle.Destructive, onClick = {})
+        row("Lên", icon = Icons.Rounded.AddCircleOutline, value = "Đã học", action = clear, onClick = {})
+        val learn = ListRowAction(Icons.Rounded.Link, "Học lệnh nút Xuống", text = "Học lệnh", onClick = {})
+        row("Xuống", icon = Icons.Rounded.AddCircleOutline, action = learn, onClick = {})
     }
     ListGroup(
         header = "Quản trị",

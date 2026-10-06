@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -54,6 +55,11 @@ class GattClient(
     @Volatile private var gatt: BluetoothGatt? = null
     @Volatile private var connected = false
     @Volatile private var closed = false
+
+    // When the last operation's callback arrived (Binder thread), for timing logs: the caller
+    // resumes later, once its dispatcher (the main thread for DoorConnection) gets to it.
+    @Volatile var lastCallbackAt = 0L
+        private set
 
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
@@ -144,6 +150,17 @@ class GattClient(
         }
     }
 
+    // Asks for a short connection interval (11.25-15 ms) until the link closes. Not a queued GATT
+    // operation and no public callback, so it returns at once; false if Android refused.
+    fun requestHighPriority(): Boolean {
+        val g = gatt?.takeIf { connected } ?: return false
+        return try {
+            g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+        } catch (e: SecurityException) {
+            throw BleException(LinkError.NoPermission, e.message ?: "BLUETOOTH_CONNECT missing")
+        }
+    }
+
     suspend fun requestMtu(mtu: Int): Int = execute(Op.Mtu) { it.requestMtu(mtu) } as Int
 
     suspend fun discoverServices() {
@@ -223,10 +240,12 @@ class GattClient(
         }
 
     private fun complete(op: Op, value: Any) {
+        lastCallbackAt = SystemClock.elapsedRealtime()
         pending?.takeIf { it.op == op }?.result?.complete(value)
     }
 
     private fun completeOrFail(op: Op, status: Int, value: Any) {
+        lastCallbackAt = SystemClock.elapsedRealtime()
         if (status == BluetoothGatt.GATT_SUCCESS) {
             complete(op, value)
         } else {

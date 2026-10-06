@@ -47,6 +47,10 @@ class AppContainer(private val context: Context) {
         val signer = CommandSigner { data ->
             checkNotNull(phoneKeyStore.signer()) { "phone key missing" }.hmacSha256(data)
         }
-        return DoorConnection(context, adapter, device, signer, scope)
+        val buttonCache = object : DoorConnection.ButtonCache {
+            override suspend fun load() = repository.cachedButtons()
+            override suspend fun save(value: ByteArray) = repository.saveButtons(value)
+        }
+        return DoorConnection(context, adapter, device, signer, buttonCache, scope)
     }
 }

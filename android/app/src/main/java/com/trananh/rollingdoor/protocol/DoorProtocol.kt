@@ -10,6 +10,7 @@ object DoorProtocol {
     val STATUS_UUID: UUID = UUID.fromString("a7930004-966e-4240-b881-5c2e2f2203a8")
     val INFO_UUID: UUID = UUID.fromString("a7930005-966e-4240-b881-5c2e2f2203a8")
     val PAIRING_UUID: UUID = UUID.fromString("a7930006-966e-4240-b881-5c2e2f2203a8")
+    val BUTTONS_UUID: UUID = UUID.fromString("a7930007-966e-4240-b881-5c2e2f2203a8")
 
     // Scan response manufacturer data while pairing is open: [company id 0xFFFF][0x01].
     const val MANUFACTURER_ID = 0xFFFF
@@ -17,7 +18,7 @@ object DoorProtocol {
 
     const val NONCE_LENGTH = 16
     const val MAC_LENGTH = 16
-    const val MAX_ARGS_LENGTH = 16
+    const val MAX_ARGS_LENGTH = 34 // SET_BUTTON: id, icon and a 32-byte name
     const val SECRET_LENGTH = 16
     const val KEY_LENGTH = 32
     const val SLOT_COUNT = 8
@@ -36,15 +37,23 @@ object DoorProtocol {
 
     // STATUS notify is [command][result]; a PAIRING request reports this command code.
     const val STATUS_PAIRING: Byte = 0x80.toByte()
+
+    // A write longer than this needs a larger MTU than the default 23. Only SET_BUTTON is.
+    const val DEFAULT_MTU_PAYLOAD = 20
+
+    // STATUS [81][result] when learning started by LearnRf ends: Ok saved, RfError not heard.
+    const val STATUS_RF_LEARNED: Byte = 0x81.toByte()
+    const val LEARN_CANCEL: Byte = 0x00 // LearnRf argument that stops learning
 }
 
 enum class Command(val code: Byte) {
     Ping(0x00),
-    Up(0x01),
-    Down(0x02),
-    Lock(0x03),
-    Unlock(0x04),
     OpenPairing(0x06),
+    LearnRf(0x09), // admin, args: [button id] to learn, [LEARN_CANCEL] to stop
+    ClearRf(0x0A), // admin, args: [button id]
+    Press(0x0B), // args: [button id]
+    SetButton(0x0C), // admin, args: see ButtonList.setArgs; adds the button or changes it
+    DeleteButton(0x0D), // admin, args: [button id]; also clears its RF code
 }
 
 enum class CommandResult(val code: Byte) {
