@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.RollingDoor" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.RollingDoor" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+
+    <!-- Kept on screen until the saved device is read, so a paired phone never sees the
+         pairing screen flash before the control screen. -->
+    <style name="Theme.RollingDoor.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/window_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.RollingDoor</item>
+    </style>
 </resources>

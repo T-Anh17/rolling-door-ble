@@ -1,0 +1,103 @@
+<resources>
+    <string name="app_name">Cửa cuốn</string>
+
+    <!-- Bluetooth gate -->
+    <string name="gate_permission_title">Cho phép thiết bị ở gần</string>
+    <string name="gate_permission_body">Ứng dụng cần quyền Thiết bị ở gần để tìm và kết nối với cửa cuốn.</string>
+    <string name="gate_location_permission_title">Cho phép vị trí</string>
+    <string name="gate_location_permission_body">Trên Android 11 trở xuống, quét Bluetooth cần quyền vị trí. Ứng dụng chỉ dùng lúc ghép đôi và không đọc vị trí của bạn.</string>
+    <string name="gate_permission_blocked_body">Quyền này đã bị từ chối. Hãy mở cài đặt ứng dụng và cho phép ở đó.</string>
+    <string name="gate_allow">Cho phép</string>
+    <string name="gate_open_settings">Mở cài đặt</string>
+    <string name="gate_bluetooth_off_title">Bluetooth đang tắt</string>
+    <string name="gate_bluetooth_off_body">Bật Bluetooth để kết nối với cửa cuốn.</string>
+    <string name="gate_turn_on_bluetooth">Bật Bluetooth</string>
+    <string name="gate_location_off_title">Định vị đang tắt</string>
+    <string name="gate_location_off_body">Trên Android 11 trở xuống, cần bật định vị để tìm thiết bị khi ghép đôi.</string>
+    <string name="gate_open_location_settings">Mở cài đặt định vị</string>
+
+    <!-- Pairing -->
+    <string name="pairing_title">Ghép đôi</string>
+    <string name="pairing_intro">Quét mã QR in từ thiết bị để điện thoại này điều khiển được cửa. Điện thoại ghép đầu tiên sẽ là quản trị.</string>
+    <string name="pairing_scan">Quét mã QR</string>
+    <string name="pairing_enter_manually">Nhập mã thủ công</string>
+    <string name="pairing_manual_label">Dán mã thiết lập, bắt đầu bằng RDOOR1:</string>
+    <string name="pairing_manual_invalid">Mã thiết lập không hợp lệ</string>
+    <string name="pairing_pair">Ghép đôi</string>
+    <string name="pairing_cancel">Hủy</string>
+    <string name="pairing_retry">Thử lại</string>
+    <string name="pairing_scan_another">Quét mã khác</string>
+    <string name="pairing_step_find">Tìm thiết bị</string>
+    <string name="pairing_step_connect">Kết nối</string>
+    <string name="pairing_step_key">Trao khóa</string>
+    <string name="pairing_step_confirm">Xác nhận</string>
+    <string name="pairing_closed_hint">Thiết bị chưa mở ghép đôi. Nếu cửa đã có điện thoại khác, giữ nút BOOT 3 giây.</string>
+    <string name="pairing_error_invalid_code">Không phải mã của cửa cuốn</string>
+    <string name="pairing_error_invalid_code_body">Hãy quét mã QR in từ thiết bị, nội dung bắt đầu bằng RDOOR1.</string>
+    <string name="pairing_error_camera_permission">Chưa cho phép camera</string>
+    <string name="pairing_error_camera_permission_body">Cho phép camera để quét mã QR, hoặc nhập mã thủ công bên dưới.</string>
+    <string name="pairing_error_camera">Không mở được camera</string>
+    <string name="pairing_error_camera_body">Camera đang bận hoặc không dùng được. Hãy nhập mã thủ công bên dưới.</string>
+    <string name="pairing_error_bluetooth_off">Bluetooth đang tắt</string>
+    <string name="pairing_error_bluetooth_off_body">Bật Bluetooth rồi thử lại.</string>
+    <string name="pairing_error_permission">Thiếu quyền Bluetooth</string>
+    <string name="pairing_error_permission_body">Cho phép Thiết bị ở gần rồi thử lại.</string>
+    <string name="pairing_error_not_found">Không tìm thấy thiết bị</string>
+    <string name="pairing_error_not_found_body">Hãy đứng gần cửa, kiểm tra thiết bị đã có điện, rồi thử lại.</string>
+    <string name="pairing_error_connection">Mất kết nối</string>
+    <string name="pairing_error_connection_body">Kết nối bị ngắt giữa chừng. Lại gần thiết bị hơn rồi thử lại.</string>
+    <string name="pairing_error_closed">Ghép đôi đang đóng</string>
+    <string name="pairing_error_closed_body">Giữ nút BOOT trên thiết bị 3 giây rồi thử lại.</string>
+    <string name="pairing_error_wrong_code">Mã QR không đúng với thiết bị</string>
+    <string name="pairing_error_wrong_code_body">Mã này thuộc thiết bị khác. Hãy quét mã in từ chính thiết bị này.</string>
+    <string name="pairing_error_locked_out">Bị khóa 60 giây</string>
+    <string name="pairing_error_locked_out_body">Sai quá nhiều lần. Chờ một phút rồi thử lại.</string>
+    <string name="pairing_error_table_full">Thiết bị đã đủ 8 điện thoại</string>
+    <string name="pairing_error_table_full_body">Cần xóa bớt một điện thoại đã ghép trước khi thêm máy mới.</string>
+    <string name="pairing_error_invalid_response">Phản hồi không hợp lệ</string>
+    <string name="pairing_error_invalid_response_body">Thiết bị trả lời không như mong đợi. Hãy thử lại; nếu vẫn lỗi, kiểm tra firmware.</string>
+
+    <!-- QR scanner -->
+    <string name="scanner_hint">Đưa mã QR vào trong khung</string>
+    <string name="scanner_wrong_code">Mã QR này không phải của cửa cuốn</string>
+    <string name="scanner_close">Đóng</string>
+    <string name="scanner_torch">Đèn pin</string>
+
+    <!-- Control -->
+    <string name="control_title">Cửa cuốn</string>
+    <string name="control_up">Lên</string>
+    <string name="control_down">Xuống</string>
+    <string name="control_lock">Khóa</string>
+    <string name="control_unlock">Mở khóa</string>
+    <string name="control_status_connecting">Đang kết nối…</string>
+    <string name="control_status_ready">Sẵn sàng</string>
+    <string name="control_status_out_of_range">Ngoài vùng</string>
+    <string name="control_status_bluetooth_off">Bluetooth đang tắt</string>
+    <string name="control_status_failed">Không kết nối được</string>
+    <string name="control_retry_now">Thử lại ngay</string>
+    <string name="control_hint_out_of_range">Sẽ tự kết nối khi bạn lại gần cửa.</string>
+    <string name="control_hint_failed">Kiểm tra thiết bị có điện rồi thử lại.</string>
+    <string name="control_hint_unsupported">Firmware trên thiết bị không khớp với app.</string>
+    <string name="control_message_pairing_opened">Đã mở ghép đôi trong 60 giây. Quét mã QR của thiết bị trên điện thoại mới.</string>
+    <string name="control_message_no_reply">Cửa không phản hồi. Xem lại cửa trước khi bấm tiếp.</string>
+    <string name="control_message_key_rejected">Thiết bị không còn nhận điện thoại này. Vào Cài đặt để quên thiết bị rồi ghép đôi lại.</string>
+    <string name="control_message_locked_out">Sai quá nhiều lần. Đợi một phút rồi thử lại.</string>
+    <string name="control_message_rf_failed">Thiết bị không phát được tín hiệu tới cửa.</string>
+    <string name="control_message_not_permitted">Chỉ điện thoại quản trị mới làm được việc này.</string>
+    <string name="control_message_unexpected">Thiết bị trả lời không như mong đợi.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Cài đặt</string>
+    <string name="settings_forget">Quên thiết bị</string>
+    <string name="settings_section_device">Thiết bị</string>
+    <string name="settings_address">Địa chỉ</string>
+    <string name="settings_role">Vai trò</string>
+    <string name="settings_role_admin">Quản trị</string>
+    <string name="settings_role_normal">Thường</string>
+    <string name="settings_section_admin">Quản trị</string>
+    <string name="settings_add_phone">Thêm điện thoại</string>
+    <string name="settings_add_phone_footer">Mở ghép đôi trong 60 giây. Trong thời gian đó, quét mã QR của thiết bị trên điện thoại mới. Cần đang kết nối với cửa.</string>
+    <string name="settings_forget_title">Quên thiết bị?</string>
+    <string name="settings_forget_body">Điện thoại này sẽ không điều khiển được cửa cho tới khi ghép đôi lại bằng mã QR của thiết bị. Thiết bị vẫn giữ ô khóa của điện thoại này cho tới khi quản trị viên xóa hoặc thiết bị được đặt lại.</string>
+    <string name="settings_cancel">Hủy</string>
+</resources>

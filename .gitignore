@@ -1,7 +1,17 @@
-firmware/.pio/
+# Build output
 android/.gradle/
 android/build/
 android/app/build/
+firmware_esp/**/.pio/
+
+# Local machine settings
 android/local.properties
 android/.idea/
 .vscode/
+.claude/settings.local.json
+
+# Secrets: never commit (see USEGUIDE.md, "Mã nguồn mở")
+secrets.h
+*.jks
+*.keystore
+keystore.properties

@@ -6,7 +6,9 @@ An ESP32-S3 sits near the door and replays the fixed codes of the original RF re
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** phase 2 done. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only) and there is no app yet. See [Roadmap](#roadmap).
+> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only). The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Next is phase 4: under 1 second from launch to ready. See [Roadmap](#roadmap).
+
+> **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
 ## How it works
 
@@ -24,15 +26,41 @@ Android app  ⇄  BLE (GATT)  ⇄  ESP32-S3  →  433MHz transmitter  →  door 
 | Part | Notes |
 |---|---|
 | LilyGO T-Display-S3 | ESP32-S3 board, display removed |
-| 433MHz transmitter (FS1000A) | Replays the remote's codes. Needs a 17.3cm wire antenna |
-| 433MHz receiver (XY-MK-5V) | Only used once, to learn the codes from the remote |
+| MX-433 kit: FS1000A transmitter | Powered from 5V. Replays the remote's codes. Needs a 17.3cm wire antenna |
+| MX-433 kit: XY-MK-5V receiver | Powered from 5V. Only used once, to learn the codes from the remote |
 | 5V USB-C adapter | Main power |
 | 3.7V LiPo cell, JST 1.25mm | Backup power, for status reporting only |
-| 2 resistors (e.g. 10kΩ + 20kΩ) | Voltage divider to detect mains power |
+| 10kΩ and 20kΩ resistors, two of each | Voltage dividers: receiver DATA to GPIO, and mains power detection |
 
 The door has no backup battery, so it does not move during a power cut. The LiPo cell only keeps the ESP32 alive so the app can show "power outage" instead of failing to connect.
 
 The remote's frequency still has to be confirmed from the marking on its SAW resonator (433.92MHz is assumed).
+
+### Wiring
+
+Both RF modules run from the board's 5V pin. The ESP32-S3 GPIOs are 3.3V only, so the receiver's 5V DATA output goes through a 10k/20k divider (5V × 20 / 30 ≈ 3.3V). The transmitter's DATA input accepts the 3.3V GPIO level directly.
+
+```
+LilyGO T-Display-S3                    FS1000A (transmitter)
+  5V   ──────────────────────────────  VCC
+  GND  ──────────────────────────────  GND
+  GPIO (RF TX) ──────────────────────  DATA
+                                       ANT ── 17.3cm wire
+
+LilyGO T-Display-S3                    XY-MK-5V (receiver)
+  5V   ──────────────────────────────  VCC
+  GND  ──────────────────────────────  GND
+  GPIO (RF RX) ──┬──── 10kΩ ─────────  DATA
+                 │
+                20kΩ
+                 │
+                GND
+
+On-board buttons: BOOT = GPIO0 (hold 3 s: open pairing), KEY = GPIO14 (hold 10 s: erase phone keys)
+USB-C: 5V adapter          JST 1.25mm: 3.7V LiPo cell
+```
+
+The RF and mains detection GPIO numbers are chosen in phase 6 and will be listed here and in `src/config.h`. Until then the firmware uses a fake RF layer and nothing needs to be connected.
 
 ## Repository layout
 
@@ -41,7 +69,9 @@ rolling-door-ble/
 ├── android/                                  Android app (Kotlin, Jetpack Compose)
 ├── firmware_esp/rolling-door-firmware-esp/   ESP32-S3 firmware (PlatformIO, Arduino)
 ├── tools/                                    QR code viewer (qr-viewer.html)
-└── docs/                                     Early planning notes (Vietnamese)
+├── docs/                                     Early planning notes (Vietnamese)
+├── USEGUIDE.md                               Working rules for contributors (Vietnamese)
+└── LICENSE                                   MIT, source code only
 ```
 
 ## BLE protocol
@@ -121,9 +151,13 @@ Requires Android Studio (for the SDK and JDK) and a phone running Android 8.0 (A
 gradlew installDebug
 ```
 
+In PowerShell on Windows, use `.\gradlew.bat installDebug`. Unit tests run with `gradlew testDebugUnitTest`.
+
 BLE does not work in the emulator; use a real device.
 
 The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.
+
+Once paired, the app opens straight on the control screen: the connection status and the four buttons, nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone** for the admin, and **Forget device**, which removes the key from this phone only.
 
 ### Setting up a new device
 
@@ -153,7 +187,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 
 - [x] **Phase 1 – BLE skeleton:** GATT server on the ESP32 with a fake RF layer (serial log only)
 - [x] **Phase 2 – Pairing and authentication:** QR code pairing, key table, HMAC check, admin role
-- [ ] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
+- [x] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
 - [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, power status in the app
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
 - [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, fit battery and mains detection
@@ -163,5 +197,15 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 
 - **Never commit secrets:** the setup secret, learned RF codes, phone keys, WiFi credentials and OTA passwords stay on the device (NVS) and out of this repository.
 - **Keep the QR code private.** Anyone with it can pair while pairing is open.
-- The remote uses a fixed code, which can be captured and replayed by anyone nearby. That weakness belongs to the door itself; the BLE side is authenticated so this project does not add a new one.
+- **Do not publish anything that reveals your door's code:** photos of the inside of the remote, its DIP switch positions, learned codes, or serial logs. Do not publish your address or photos that identify your house.
+- The remote uses a fixed code, which can be captured and replayed by anyone nearby. That weakness belongs to the door itself; the BLE side is authenticated so this project does not add a new one. If your door supports a rolling-code remote, that is the safer choice.
+- **Use this project only on a door you own or are allowed to control.**
 - Keep the original remote and the manual chain as a fallback.
+
+## License
+
+The source code is released under the [MIT License](LICENSE).
+
+The license covers the source code only. The app name and the app icon are not covered by it. If you publish your own build or a fork, give it your own name and icon.
+
+The author's icon is not in this repository; a build from it uses the default Android icon. To use your own, put your launcher icon resources (and optionally `drawable/ic_launcher_foreground` for the splash screen) in `android/app/src/brand/res`, which is gitignored and overrides the defaults.
