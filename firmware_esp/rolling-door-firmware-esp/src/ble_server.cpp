@@ -253,7 +253,7 @@ void begin() {
 
   statusChar = service->createCharacteristic(config::kStatusUuid, NIMBLE_PROPERTY::NOTIFY);
 
-  // [power source: 0 = mains, 1 = battery][battery percent: 0xFF = not measured]
+  // [00, once the power source][battery percent: 0xFE = on USB, 0xFF = no cell]
   // [learned RF buttons: bit n = button n + 1][button list revision]
   // main.cpp keeps it up to date with setInfo().
   infoChar = service->createCharacteristic(config::kInfoUuid,

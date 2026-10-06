@@ -68,6 +68,22 @@ constexpr uint8_t kRfRxPin = 12;
 constexpr uint8_t kRfRepeat = 10;  // frames per command, like holding the remote button briefly
 constexpr uint32_t kRfLearnTimeoutMs = 15 * 1000;
 
+// LiPo cell: the T-Display-S3 halves its voltage into GPIO4. Read every 5 s, 16 samples averaged;
+// below 2.5 V there is no cell. On USB the pin sees the charger instead (~4.6 V), so above 4.4 V
+// the board reports "charging" rather than a percent. INFO changes when the percent moves by 2
+// or more.
+constexpr uint8_t kBatteryPin = 4;
+// On battery the divider only works while GPIO15 (LCD_POWER_ON) is high, so it is raised just for
+// each reading; it also powers the unused display, so it stays low otherwise.
+constexpr uint8_t kBatteryEnablePin = 15;
+constexpr uint32_t kBatterySettleMs = 10;
+constexpr uint8_t kBatteryDivider = 2;
+constexpr uint8_t kBatterySamples = 16;
+constexpr uint32_t kBatterySampleMs = 5 * 1000;
+constexpr uint16_t kBatteryMissingMv = 2500;
+constexpr uint16_t kBatteryUsbMv = 4400;
+constexpr uint8_t kBatteryReportStep = 2;
+
 // Remote buttons the admin sets up: id 1-8, each with an icon, a name and one RF code.
 constexpr uint8_t kMaxButtons = 8;
 constexpr size_t kButtonNameLength = 32;  // UTF-8 bytes
