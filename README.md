@@ -6,7 +6,7 @@ An ESP32-S3 sits near the door and replays the fixed codes of the original RF re
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; real RF is in progress (phase 6): codes are learned from the remote in the admin phone's Settings (or over the serial console) and replayed with `rc-switch`. The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Phase 4 in progress: the app shows a power outage from `INFO` (fake values for now); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
+> **Status:** v0.0.1, phases 1–3 done. The firmware pairs phones by QR code and authenticates every command. The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a screen of up to eight buttons. Real RF is in progress (phase 6): the admin adds, edits and deletes buttons and learns their codes from the original remote, and the board replays them with `rc-switch`. Phase 4 in progress: the app shows a power outage from `INFO` (fake values until mains detection is fitted); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
 
 > **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
