@@ -17,9 +17,40 @@ namespace {
 
 constexpr char kTagLabel[] = "RDPAIR-A";
 constexpr char kKdfInfo[] = "RDPAIR v1";
+constexpr char kInviteLabel[] = "RDINVITE";
+constexpr uint8_t kInviteResponse = 0x02;
 
 bool windowOpen = false;
 uint32_t openedAt = 0;
+
+bool inviteActive = false;
+uint32_t invitedAt = 0;
+uint8_t invite[config::kSecretLength];  // the secret derived from the digits
+
+void dropInvite() {
+  inviteActive = false;
+  memset(invite, 0, sizeof(invite));
+}
+
+// The QR code's secret works while no phone is paired, or in the window after open().
+bool windowIsOpen() {
+  if (key_store::count() == 0) {
+    return true;
+  }
+  if (windowOpen && millis() - openedAt >= config::kPairingWindowMs) {
+    windowOpen = false;
+    Serial.println("[PAIR] window closed (timeout)");
+  }
+  return windowOpen;
+}
+
+bool inviteIsValid() {
+  if (inviteActive && millis() - invitedAt >= config::kInviteMs) {
+    dropInvite();
+    Serial.println("[PAIR] invite expired");
+  }
+  return inviteActive;
+}
 
 int randomBytes(void*, unsigned char* out, size_t length) {
   esp_fill_random(out, length);
@@ -27,7 +58,8 @@ int randomBytes(void*, unsigned char* out, size_t length) {
 }
 
 // tagA = HMAC-SHA256(secret, "RDPAIR-A" + nonce + appPublicKey), first 16 bytes.
-bool verifyTag(const uint8_t* appPublic, const uint8_t* tag, const uint8_t* nonce) {
+bool verifyTag(const uint8_t* secret, const uint8_t* appPublic, const uint8_t* tag,
+               const uint8_t* nonce) {
   uint8_t message[sizeof(kTagLabel) - 1 + config::kNonceLength + config::kPublicKeyLength];
   size_t offset = 0;
   memcpy(message, kTagLabel, sizeof(kTagLabel) - 1);
@@ -37,14 +69,15 @@ bool verifyTag(const uint8_t* appPublic, const uint8_t* tag, const uint8_t* nonc
   memcpy(message + offset, appPublic, config::kPublicKeyLength);
 
   uint8_t expected[config::kMacLength];
-  auth::hmac16(device_secret::secret(), config::kSecretLength, message, sizeof(message), expected);
+  auth::hmac16(secret, config::kSecretLength, message, sizeof(message), expected);
   return auth::equal(expected, tag, config::kMacLength);
 }
 
 // ECDH P-256 with an ephemeral key, K = HKDF-SHA256(salt = nonce, ikm = Z + secret, info),
 // then AES-256-GCM(K, plain, aad = appPublic + devicePublic).
 // out: [0x00][device public key][iv][ciphertext][tag]
-bool seal(const uint8_t* appPublic, const uint8_t* nonce, const uint8_t* plain, uint8_t* out) {
+bool seal(const uint8_t* secret, const uint8_t* appPublic, const uint8_t* nonce,
+          const uint8_t* plain, uint8_t* out) {
   mbedtls_ecp_group group;
   mbedtls_mpi privateKey, shared;
   mbedtls_ecp_point devicePoint, appPoint;
@@ -75,7 +108,7 @@ bool seal(const uint8_t* appPublic, const uint8_t* nonce, const uint8_t* plain, 
       mbedtls_mpi_write_binary(&shared, ikm, 32) == 0;
 
   if (ok) {
-    memcpy(ikm + 32, device_secret::secret(), config::kSecretLength);
+    memcpy(ikm + 32, secret, config::kSecretLength);
     ok = mbedtls_hkdf(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), nonce, config::kNonceLength,
                       ikm, sizeof(ikm), reinterpret_cast<const uint8_t*>(kKdfInfo),
                       sizeof(kKdfInfo) - 1, sessionKey, sizeof(sessionKey)) == 0;
@@ -111,14 +144,8 @@ bool seal(const uint8_t* appPublic, const uint8_t* nonce, const uint8_t* plain, 
 }  // namespace
 
 bool isOpen() {
-  if (key_store::count() == 0) {
-    return true;
-  }
-  if (windowOpen && millis() - openedAt >= config::kPairingWindowMs) {
-    windowOpen = false;
-    Serial.println("[PAIR] window closed (timeout)");
-  }
-  return windowOpen;
+  const bool window = windowIsOpen();
+  return inviteIsValid() || window;
 }
 
 void open(const char* reason) {
@@ -133,6 +160,50 @@ void close() {
     windowOpen = false;
     Serial.println("[PAIR] window closed");
   }
+  if (inviteActive) {
+    dropInvite();
+    Serial.println("[PAIR] invite used");
+  }
+}
+
+void createInvite(const uint8_t adminKey[config::kKeyLength], uint8_t* response,
+                  size_t& responseLength) {
+  // Uniform 0-99999999: drop the top of the 32-bit range that does not divide evenly.
+  uint32_t value;
+  do {
+    value = esp_random();
+  } while (value >= 4200000000u);
+  value %= 100000000u;
+  uint8_t digits[config::kInviteDigits];
+  for (size_t i = config::kInviteDigits; i-- > 0;) {
+    digits[i] = static_cast<uint8_t>('0' + value % 10);
+    value /= 10;
+  }
+  uint8_t derived[config::kMacLength];
+  auth::hmac16(digits, sizeof(digits), reinterpret_cast<const uint8_t*>(kInviteLabel),
+               sizeof(kInviteLabel) - 1, derived);
+  memcpy(invite, derived, config::kSecretLength);
+  memset(derived, 0, sizeof(derived));
+  inviteActive = true;
+  invitedAt = millis();
+
+  uint8_t* salt = response + 1;
+  uint8_t* masked = salt + config::kNonceLength;
+  esp_fill_random(salt, config::kNonceLength);
+  uint8_t message[sizeof(kInviteLabel) - 1 + config::kNonceLength];
+  memcpy(message, kInviteLabel, sizeof(kInviteLabel) - 1);
+  memcpy(message + sizeof(kInviteLabel) - 1, salt, config::kNonceLength);
+  uint8_t mask[config::kMacLength];
+  auth::hmac16(adminKey, config::kKeyLength, message, sizeof(message), mask);
+  for (size_t i = 0; i < config::kInviteDigits; i++) {
+    masked[i] = digits[i] ^ mask[i];
+  }
+  memset(mask, 0, sizeof(mask));
+  memset(digits, 0, sizeof(digits));
+  response[0] = kInviteResponse;
+  responseLength = config::kInviteResponseLength;
+  Serial.printf("[PAIR] invite created, valid for %u s\n",
+                static_cast<unsigned>(config::kInviteMs / 1000));
 }
 
 Result handleRequest(const uint8_t* request, size_t length,
@@ -141,17 +212,28 @@ Result handleRequest(const uint8_t* request, size_t length,
   Result result = Result::Ok;
   const uint8_t* appPublic = request + 1;
   const uint8_t* tag = appPublic + config::kPublicKeyLength;
+  // The QR code's secret while the window is open, else a valid invite's.
+  const bool window = windowIsOpen();
+  const bool invited = inviteIsValid();
+  const uint8_t* secret = nullptr;
 
   if (length != config::kPairingRequestLength || request[0] != 0x01) {
     result = Result::BadCommand;
   } else if (auth::isLockedOut()) {
     result = Result::LockedOut;
-  } else if (!isOpen()) {
+  } else if (!window && !invited) {
     result = Result::PairingClosed;
-  } else if (!verifyTag(appPublic, tag, nonce)) {
-    Serial.println("[PAIR] wrong QR secret");
-    auth::recordFailure();
-    result = Result::AuthFailed;
+  } else {
+    if (window && verifyTag(device_secret::secret(), appPublic, tag, nonce)) {
+      secret = device_secret::secret();
+    } else if (invited && verifyTag(invite, appPublic, tag, nonce)) {
+      secret = invite;
+    }
+    if (secret == nullptr) {
+      Serial.println("[PAIR] wrong QR secret");
+      auth::recordFailure();
+      result = Result::AuthFailed;
+    }
   }
 
   if (result == Result::Ok) {
@@ -166,7 +248,7 @@ Result handleRequest(const uint8_t* request, size_t length,
       plain[1] = slot->role;
       memcpy(plain + 2, slot->key, config::kKeyLength);
       const uint32_t started = millis();
-      const bool sealed = seal(appPublic, nonce, plain, response);
+      const bool sealed = seal(secret, appPublic, nonce, plain, response);
       memset(plain, 0, sizeof(plain));
       if (sealed) {
         auth::recordSuccess();

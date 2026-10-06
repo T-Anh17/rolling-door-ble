@@ -13,12 +13,17 @@ namespace cmd {
 constexpr uint8_t kPing = 0x00;         // no-op; confirms pairing and checks a key
 constexpr uint8_t kUpdateMode = 0x05;   // admin, phase 5
 constexpr uint8_t kOpenPairing = 0x06;  // admin
-constexpr uint8_t kRevokePhone = 0x07;  // admin, args: [key id]
+constexpr uint8_t kRevokePhone = 0x07;  // admin, args: [key id], not its own
+constexpr uint8_t kLeave = 0x08;        // removes the sender's own slot; an admin only as the last phone
 constexpr uint8_t kLearnRf = 0x09;      // admin, args: [button 1-8] to learn, [00] to cancel
 constexpr uint8_t kClearRf = 0x0A;      // admin, args: [button 1-8]
 constexpr uint8_t kPress = 0x0B;        // args: [button 1-8]
 constexpr uint8_t kSetButton = 0x0C;    // admin, args: [button 1-8][icon][name UTF-8 0-32]
 constexpr uint8_t kDeleteButton = 0x0D; // admin, args: [button 1-8]
+constexpr uint8_t kListPhones = 0x0E;   // puts the phone list in PHONES; a phone learns its role from it
+constexpr uint8_t kRenamePhone = 0x0F;  // args: [key id][name UTF-8 0-32]; the admin any, others their own
+constexpr uint8_t kMakeAdmin = 0x10;    // admin, args: [key id]; the sender becomes a normal phone
+constexpr uint8_t kInvite = 0x11;       // admin, a one-time pairing secret in PAIRING, see pairing.h
 constexpr uint8_t kPairing = 0x80;      // STATUS code for a PAIRING request
 constexpr uint8_t kRfLearned = 0x81;    // STATUS code when learning started by kLearnRf ends
 }  // namespace cmd

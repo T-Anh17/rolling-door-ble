@@ -5,6 +5,10 @@
 
 #include "protocol.h"
 
+// Up to config::kMaxConnections phones at once: the board keeps advertising while it has room,
+// so one phone with the app open does not lock the others out. Each connection has its own
+// CHALLENGE nonce, gets its own STATUS notifications, and reads its own PAIRING and PHONES
+// values; INFO is notified to all.
 namespace ble {
 
 // Everything the NimBLE task receives is queued and handled in loop(), on one task.
@@ -28,25 +32,29 @@ void begin();
 // Pops the next event. Non-blocking; false if none is queued.
 bool nextEvent(Event& out);
 
-// Current CHALLENGE nonce (config::kNonceLength bytes).
-const uint8_t* nonce();
+// This connection's CHALLENGE nonce (config::kNonceLength bytes); nullptr if it is gone.
+const uint8_t* nonce(uint16_t connHandle);
 
-// Replaces the CHALLENGE nonce and notifies the new value.
-void rotateChallenge();
+// Replaces this connection's nonce and notifies it the new value.
+void rotateChallenge(uint16_t connHandle);
 
-// Notifies STATUS with [command][result].
-void notifyStatus(uint8_t command, Result result);
+// Notifies STATUS with [command][result] to this connection.
+void notifyStatus(uint16_t connHandle, uint8_t command, Result result);
 
 // Sets INFO to [power source][battery percent][learned RF buttons][button list revision]
-// and notifies it.
+// and notifies it to every connection.
 void setInfo(uint8_t powerSource, uint8_t batteryPercent, uint8_t learnedMask, uint8_t revision);
 
 // Value returned by reads of BUTTONS (see remote_buttons::serialize).
 void setButtons(const uint8_t* data, size_t length);
 
-// Value returned by reads of PAIRING.
-void setPairingResponse(const uint8_t* data, size_t length);
-void clearPairingResponse();
+// What this connection reads from PHONES (see key_store::serialize); empty for the others and
+// after it disconnects.
+void setPhones(uint16_t connHandle, const uint8_t* data, size_t length);
+
+// What this connection reads from PAIRING: a pairing response or an invite; empty for the
+// others and after it disconnects.
+void setPairingResponse(uint16_t connHandle, const uint8_t* data, size_t length);
 
 // Adds or removes the "pairing open" flag in the scan response.
 void setPairingAdvertised(bool open);
