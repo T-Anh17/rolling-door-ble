@@ -1,21 +1,21 @@
 #pragma once
 
-#include "protocol.h"
+#include <stdint.h>
 
 // RF 433MHz layer: rc-switch transmitter on kRfTxPin; receiver on kRfRxPin, used only while
 // learning, scanning or self-testing, with its own protocol 1 decoder. One fixed code per
-// door button, kept in NVS (namespace "rf").
+// remote button (id 1-8, see remote_buttons.h), kept in NVS (namespace "rf").
 namespace rf {
 
 void begin();
 
-// Transmits the learned code for the command. Returns false if the button has no code yet
-// or a code is being learned.
-bool send(DoorCommand command);
+// Transmits the learned code for the button. Returns false if the button has no code yet
+// or the receiver is in use.
+bool send(uint8_t id);
 
 // Listens on the receiver for up to kRfLearnTimeoutMs. The code is saved once the same code
 // is received twice in a row. Returns false if already learning.
-bool startLearn(DoorCommand button);
+bool startLearn(uint8_t id);
 void cancelLearn();
 bool isLearning();
 
@@ -31,11 +31,21 @@ bool selfTest();
 // transmits is exactly the code learned from that remote button. Returns false while busy.
 bool verify();
 
-// Call every loop(): handles the receiver and the timeouts while learning or scanning.
-void poll();
+enum class LearnOutcome : uint8_t {
+  None,      // still learning, or not learning
+  Learned,   // the code was saved
+  TimedOut,  // no code decoded twice within kRfLearnTimeoutMs
+};
 
-void clear(DoorCommand button);
+// Call every loop(): handles the receiver and the timeouts while learning or scanning.
+// Returns how learning ended, once, on the call where it ends. Cancelling reports nothing.
+LearnOutcome poll();
+
+void clear(uint8_t id);
 void clearAll();
+
+// Bit n is set when button n + 1 has a code.
+uint8_t learnedMask();
 
 // Lists the buttons with protocol, bit count and pulse length. Never prints the code itself.
 void print();

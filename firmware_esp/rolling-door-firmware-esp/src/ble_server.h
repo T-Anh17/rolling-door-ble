@@ -12,7 +12,7 @@ struct Event {
   enum class Type : uint8_t {
     Connected,
     Disconnected,
-    Command,         // data: COMMAND payload, 18-34 bytes
+    Command,         // data: COMMAND payload, 18-52 bytes
     BadCommand,      // COMMAND payload with a wrong length
     PairingRequest,  // data: PAIRING write
   };
@@ -37,8 +37,12 @@ void rotateChallenge();
 // Notifies STATUS with [command][result].
 void notifyStatus(uint8_t command, Result result);
 
-// Sets INFO to [power source][battery percent] and notifies it.
-void setInfo(uint8_t powerSource, uint8_t batteryPercent);
+// Sets INFO to [power source][battery percent][learned RF buttons][button list revision]
+// and notifies it.
+void setInfo(uint8_t powerSource, uint8_t batteryPercent, uint8_t learnedMask, uint8_t revision);
+
+// Value returned by reads of BUTTONS (see remote_buttons::serialize).
+void setButtons(const uint8_t* data, size_t length);
 
 // Value returned by reads of PAIRING.
 void setPairingResponse(const uint8_t* data, size_t length);

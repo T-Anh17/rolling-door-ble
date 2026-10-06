@@ -5,7 +5,7 @@
 #include "device_secret.h"
 #include "key_store.h"
 #include "power.h"
-#include "protocol.h"
+#include "remote_buttons.h"
 #include "rf.h"
 
 namespace console {
@@ -45,17 +45,15 @@ void runPower(const String& args) {
 constexpr const char* kRfUsage =
     "[CONSOLE] usage: rf list | rf learn <button> | rf send <button> | rf verify | rf cancel | "
     "rf scan | rf selftest | "
-    "rf clear [button]   (button: up, down, lock, unlock)";
+    "rf clear [button]   (button: 1-8)";
 
-bool parseButton(const String& name, DoorCommand& out) {
-  for (uint8_t c = static_cast<uint8_t>(DoorCommand::Up);
-       c <= static_cast<uint8_t>(DoorCommand::Unlock); c++) {
-    if (name.equalsIgnoreCase(commandName(c))) {
-      out = static_cast<DoorCommand>(c);
-      return true;
-    }
+bool parseButton(const String& name, uint8_t& out) {
+  const long id = name.toInt();
+  if (name.length() != 1 || id < 1 || id > config::kMaxButtons) {
+    return false;
   }
-  return false;
+  out = static_cast<uint8_t>(id);
+  return true;
 }
 
 // "rf list|learn|send|cancel|clear [button]": learn and test the remote's codes.
@@ -68,7 +66,7 @@ void runRf(const String& args) {
     name = args.substring(space + 1);
     name.trim();
   }
-  DoorCommand button;
+  uint8_t button = 0;
   const bool hasButton = parseButton(name, button);
   if (verb == "list" && name.length() == 0) {
     rf::print();
@@ -112,10 +110,12 @@ Action run(const String& command) {
     return Action::WipeKeys;
   } else if (command.startsWith("power ")) {
     runPower(command.substring(6));
+  } else if (command == "buttons") {
+    remote_buttons::print();
   } else if (command == "rf" || command.startsWith("rf ")) {
     runRf(command.length() > 3 ? command.substring(3) : String());
   } else if (command.length() > 0) {
-    Serial.println("[CONSOLE] commands: qr, keys, pair, wipe, power mains|battery [0-100], rf");
+    Serial.println("[CONSOLE] commands: qr, keys, pair, wipe, power mains|battery [0-100], buttons, rf");
   }
   return Action::None;
 }

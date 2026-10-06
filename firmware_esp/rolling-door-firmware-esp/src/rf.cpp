@@ -5,11 +5,13 @@
 #include <RCSwitch.h>
 #include <string.h>
 
+#include "config.h"
+
 namespace rf {
 namespace {
 
 constexpr const char* kNamespace = "rf";
-constexpr size_t kButtonCount = 4;
+constexpr uint8_t kButtonCount = config::kMaxButtons;
 // Shorter codes are receiver noise, not a remote.
 constexpr uint8_t kMinBits = 8;
 constexpr uint8_t kMaxBits = 32;
@@ -185,23 +187,48 @@ bool takeFrame(Code& out, const char*& error, uint8_t& repaired) {
   return true;
 }
 
-uint8_t indexOf(DoorCommand button) {
-  return static_cast<uint8_t>(button) - static_cast<uint8_t>(DoorCommand::Up);
+bool validId(uint8_t id) {
+  return id >= 1 && id <= kButtonCount;
 }
 
-const char* nameOf(uint8_t index) {
-  return commandName(static_cast<uint8_t>(DoorCommand::Up) + index);
+// NVS key of button id: "c1" to "c8".
+void keyOf(uint8_t id, char (&key)[4]) {
+  snprintf(key, sizeof(key), "c%u", id);
 }
 
 void save(uint8_t index) {
+  char key[4];
+  keyOf(index + 1, key);
   Preferences prefs;
   prefs.begin(kNamespace, false);
   if (codes[index].bits == 0) {
-    if (prefs.isKey(nameOf(index))) {
-      prefs.remove(nameOf(index));
+    if (prefs.isKey(key)) {
+      prefs.remove(key);
     }
   } else {
-    prefs.putBytes(nameOf(index), &codes[index], sizeof(Code));
+    prefs.putBytes(key, &codes[index], sizeof(Code));
+  }
+  prefs.end();
+}
+
+// Codes learned before buttons had ids were saved as "UP", "DOWN", "LOCK" and "UNLOCK".
+void migrateOldKeys() {
+  const char* oldKeys[] = {"UP", "DOWN", "LOCK", "UNLOCK"};
+  Preferences prefs;
+  prefs.begin(kNamespace, false);
+  for (uint8_t i = 0; i < 4; i++) {
+    if (!prefs.isKey(oldKeys[i])) {
+      continue;
+    }
+    char key[4];
+    keyOf(i + 1, key);
+    if (prefs.getBytesLength(oldKeys[i]) == sizeof(Code) && !prefs.isKey(key)) {
+      Code code;
+      prefs.getBytes(oldKeys[i], &code, sizeof(Code));
+      prefs.putBytes(key, &code, sizeof(Code));
+    }
+    prefs.remove(oldKeys[i]);
+    Serial.printf("[RF] moved the code of %s to button %u\n", oldKeys[i], i + 1);
   }
   prefs.end();
 }
@@ -211,22 +238,23 @@ void stopLearning() {
   learning.active = false;
 }
 
-void pollLearn() {
+LearnOutcome pollLearn() {
   if (static_cast<int32_t>(millis() - learning.deadline) >= 0) {
     stopLearning();
-    Serial.printf("[RF] learning %s timed out: no code decoded twice (%lu frame(s) rejected)\n",
-                  nameOf(learning.index), static_cast<unsigned long>(learning.rejected));
-    return;
+    Serial.printf("[RF] learning button %u timed out: no code decoded twice (%lu frame(s) "
+                  "rejected)\n",
+                  learning.index + 1, static_cast<unsigned long>(learning.rejected));
+    return LearnOutcome::TimedOut;
   }
   Code received;
   const char* error = nullptr;
   uint8_t repaired = 0;
   if (!takeFrame(received, error, repaired)) {
-    return;
+    return LearnOutcome::None;
   }
   if (error != nullptr) {
     learning.rejected++;
-    return;
+    return LearnOutcome::None;
   }
   Serial.printf("[RF] heard protocol %u, %u bits, pulse %uus, %u pulse(s) repaired\n",
                 received.protocol, received.bits, received.pulseUs, repaired);
@@ -238,11 +266,12 @@ void pollLearn() {
     codes[index] = received;
     save(index);
     stopLearning();
-    Serial.printf("[RF] learned %s: protocol %u, %u bits, pulse %uus\n", nameOf(index),
+    Serial.printf("[RF] learned button %u: protocol %u, %u bits, pulse %uus\n", index + 1,
                   received.protocol, received.bits, received.pulseUs);
-    return;
+    return LearnOutcome::Learned;
   }
   candidate = received;
+  return LearnOutcome::None;
 }
 
 void pollScan() {
@@ -277,12 +306,15 @@ void pollScan() {
 
 void begin() {
   memset(codes, 0, sizeof(codes));
+  migrateOldKeys();
   Preferences prefs;
   prefs.begin(kNamespace, true);
   size_t learned = 0;
   for (uint8_t i = 0; i < kButtonCount; i++) {
-    if (prefs.isKey(nameOf(i)) && prefs.getBytesLength(nameOf(i)) == sizeof(Code)) {
-      prefs.getBytes(nameOf(i), &codes[i], sizeof(Code));
+    char key[4];
+    keyOf(i + 1, key);
+    if (prefs.isKey(key) && prefs.getBytesLength(key) == sizeof(Code)) {
+      prefs.getBytes(key, &codes[i], sizeof(Code));
       learned += codes[i].bits > 0 ? 1 : 0;
     }
   }
@@ -297,36 +329,38 @@ void begin() {
                 static_cast<unsigned>(kButtonCount));
 }
 
-bool send(DoorCommand command) {
-  const uint8_t index = indexOf(command);
-  if (learning.active || scan.active) {
-    Serial.printf("[RF] %s refused: receiver in use\n", nameOf(index));
+bool send(uint8_t id) {
+  if (!validId(id)) {
     return false;
   }
-  const Code& code = codes[index];
+  if (learning.active || scan.active) {
+    Serial.printf("[RF] button %u refused: receiver in use\n", id);
+    return false;
+  }
+  const Code& code = codes[id - 1];
   if (code.bits == 0) {
-    Serial.printf("[RF] %s has no code, learn it with \"rf learn\"\n", nameOf(index));
+    Serial.printf("[RF] button %u has no code, learn it with \"rf learn\"\n", id);
     return false;
   }
   const uint32_t start = millis();
   radio.setProtocol(code.protocol, code.pulseUs);
   radio.send(code.value, code.bits);
-  Serial.printf("[RF] sent %s x%u in %lums\n", nameOf(index), config::kRfRepeat,
+  Serial.printf("[RF] sent button %u x%u in %lums\n", id, config::kRfRepeat,
                 static_cast<unsigned long>(millis() - start));
   return true;
 }
 
-bool startLearn(DoorCommand button) {
-  if (learning.active || scan.active) {
+bool startLearn(uint8_t id) {
+  if (!validId(id) || learning.active || scan.active) {
     return false;
   }
   learning = {};
   learning.active = true;
-  learning.index = indexOf(button);
+  learning.index = id - 1;
   learning.deadline = millis() + config::kRfLearnTimeoutMs;
   startCapture();
-  Serial.printf("[RF] learning %s: hold that button on the remote near the receiver (%lus)\n",
-                nameOf(learning.index),
+  Serial.printf("[RF] learning button %u: hold the remote button near the receiver (%lus)\n",
+                id,
                 static_cast<unsigned long>(config::kRfLearnTimeoutMs / 1000));
   return true;
 }
@@ -355,12 +389,13 @@ bool startScan() {
   return true;
 }
 
-void poll() {
+LearnOutcome poll() {
   if (scan.active) {
     pollScan();
   } else if (learning.active) {
-    pollLearn();
+    return pollLearn();
   }
+  return LearnOutcome::None;
 }
 
 namespace {
@@ -420,45 +455,58 @@ bool verify() {
   for (uint8_t i = 0; i < kButtonCount; i++) {
     const Code& code = codes[i];
     if (code.bits == 0) {
-      Serial.printf("[RF] verify %-6s not learned\n", nameOf(i));
+      Serial.printf("[RF] verify button %u not learned\n", i + 1);
       continue;
     }
     for (uint8_t j = 0; j < i; j++) {
       if (codes[j].bits == code.bits && codes[j].value == code.value) {
-        Serial.printf("[RF] verify %-6s WARNING: same code as %s, learn one of them again\n",
-                      nameOf(i), nameOf(j));
+        Serial.printf("[RF] verify button %u WARNING: same code as button %u, learn one of "
+                      "them again\n",
+                      i + 1, j + 1);
       }
     }
     const Loopback result = loopback(code);
     const char* verdict = result.others > 0    ? "MISMATCH"
                           : result.matches > 0 ? "OK"
                                                : "NOT HEARD";
-    Serial.printf("[RF] verify %-6s %s (%u/%u frames match the learned code)\n", nameOf(i),
+    Serial.printf("[RF] verify button %u %s (%u/%u frames match the learned code)\n", i + 1,
                   verdict, result.matches, result.frames);
   }
   return true;
 }
 
-void clear(DoorCommand button) {
-  const uint8_t index = indexOf(button);
-  codes[index] = {};
-  save(index);
-  Serial.printf("[RF] %s cleared\n", nameOf(index));
+void clear(uint8_t id) {
+  if (!validId(id)) {
+    return;
+  }
+  codes[id - 1] = {};
+  save(id - 1);
+  Serial.printf("[RF] button %u cleared\n", id);
 }
 
 void clearAll() {
-  for (uint8_t i = 0; i < kButtonCount; i++) {
-    clear(static_cast<DoorCommand>(static_cast<uint8_t>(DoorCommand::Up) + i));
+  for (uint8_t id = 1; id <= kButtonCount; id++) {
+    clear(id);
   }
+}
+
+uint8_t learnedMask() {
+  uint8_t mask = 0;
+  for (uint8_t i = 0; i < kButtonCount; i++) {
+    if (codes[i].bits > 0) {
+      mask |= 1 << i;
+    }
+  }
+  return mask;
 }
 
 void print() {
   for (uint8_t i = 0; i < kButtonCount; i++) {
     const Code& code = codes[i];
     if (code.bits == 0) {
-      Serial.printf("[RF] %-6s not learned\n", nameOf(i));
+      Serial.printf("[RF] button %u not learned\n", i + 1);
     } else {
-      Serial.printf("[RF] %-6s protocol %u, %u bits, pulse %uus\n", nameOf(i), code.protocol,
+      Serial.printf("[RF] button %u protocol %u, %u bits, pulse %uus\n", i + 1, code.protocol,
                     code.bits, code.pulseUs);
     }
   }
