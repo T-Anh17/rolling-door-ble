@@ -36,7 +36,7 @@ rolling-door-ble/
 │       ├── auth.*, key_store.*               Kiểm tra HMAC, bảng 8 khóa trong NVS
 │       ├── pairing.*, device_secret.*        Ghép đôi, setup secret và chuỗi QR
 │       ├── protocol.*, buttons.*, console.*  Mã lệnh, nút BOOT/KEY, lệnh serial
-│       ├── rf.h, rf_fake.cpp                 Lớp RF (hiện là bản giả, chỉ in log)
+│       ├── rf.h, rf.cpp                      Lớp RF: phát bằng rc-switch, tự giải mã lúc học mã, lưu mã trong NVS
 │       └── power.h, power_fake.cpp           Trạng thái nguồn cho INFO (hiện là bản giả, đặt bằng lệnh serial)
 ├── tools/qr-viewer.html                      Đọc mã QR từ board qua Web Serial
 └── docs/                                     Ghi chú kế hoạch ban đầu
@@ -48,12 +48,12 @@ rolling-door-ble/
 |---|---|
 | LilyGO T-Display-S3 | Board ESP32-S3, bỏ màn hình. Nút BOOT = GPIO0, nút KEY = GPIO14 |
 | Bộ MX-433: FS1000A (phát) | Cấp 5V. Phát lại mã của remote. Anten dây 17,3cm |
-| Bộ MX-433: XY-MK-5V (thu) | Cấp 5V. Chỉ dùng khi học mã từ remote. DATA ra mức 5V nên phải qua cầu phân áp 10k/20k trước khi vào GPIO |
+| Bộ MX-433: XY-MK-5V / MX-05V (thu) | Cấp 5V. Chỉ dùng khi học mã từ remote. DATA ra mức 5V nên phải qua cầu phân áp 10k/20k trước khi vào GPIO |
 | Adapter 5V USB-C | Nguồn chính |
 | Pin LiPo 3,7V, cổng JST 1,25mm | Nguồn dự phòng, chỉ để báo mất điện |
 | Điện trở 10kΩ và 20kΩ | Cầu phân áp cho DATA mạch thu và cho mạch phát hiện điện lưới |
 
-Chân GPIO cho DATA phát, DATA thu và phát hiện điện lưới chưa chốt; sẽ chọn ở giai đoạn 6 và ghi vào `config.h` cùng README.
+DATA phát nối GPIO13, DATA thu nối GPIO12 qua cầu phân áp (ghi trong `config.h` và README). Chân phát hiện điện lưới chưa chốt, sẽ chọn sau trong giai đoạn 6. Chân 5V của board chỉ có điện khi cắm USB, nên lúc chạy pin hai mạch RF tắt.
 
 ## Build trên Windows
 
@@ -110,7 +110,7 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 | 3 | App Android: ghép đôi, màn hình bốn nút, tự kết nối | Xong |
 | 4 | Hoàn thiện: dưới 1 giây từ lúc mở đến sẵn sàng, xử lý mất kết nối, trạng thái nguồn | Chưa |
 | 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
-| 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, lắp pin và mạch phát hiện điện lưới | Chưa |
+| 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, lắp pin và mạch phát hiện điện lưới | Đang làm |
 | 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Chưa |
 
 Giai đoạn 3 gồm: giao thức và crypto ghép đôi (có unit test), lưu khóa trong Android Keystore, GATT client và tự kết nối lại, màn hình ghép đôi, máy quét QR offline, gate quyền Bluetooth, design tokens và components, icon app, màn hình điều khiển (trạng thái và bốn nút, không cuộn) và sheet Cài đặt (thông tin thiết bị, Thêm điện thoại cho admin, Quên thiết bị). Đã chạy thử trên máy thật với board: bốn lệnh tới board và trả `0x00`, Thêm điện thoại mở ghép đôi, ẩn app thì ngắt kết nối, mở lại thì tự kết nối.
@@ -141,6 +141,12 @@ Việc còn lại, làm cuối giai đoạn 4:
 - Có kết nối rồi còn chờ main vẽ màn đầu, thường khoảng 0,27 giây. Hướng sửa dự kiến: chạy `DoorLink.open()` trên một dispatcher nền. `GattClient` và `DoorLink` đã an toàn khi gọi từ luồng khác, chỉ phần trạng thái của `DoorConnection` mới cần ở lại main.
 - Discover mất 0,36–0,62 giây, là bước lâu nhất. Việc này nằm phía radio và firmware: ESP xin chu kỳ kết nối ngắn ngay khi vừa kết nối, và xem có bớt được service, characteristic trong bảng GATT không (Android discover lại toàn bộ mỗi lần vì không bond nên không cache).
 - Kết nối dao động 0,13–0,58 giây không phải do chu kỳ quảng bá: board đã quảng bá 20–30 ms (nhánh `esp32`, commit `a82a387`) mà số đo không đổi. Cần xem thông số kết nối phía Android (HCI snoop log).
+
+Giai đoạn 6, đã làm (nhánh `esp32`): thay lớp RF giả bằng `rc-switch`, phát lặp 10 lần mỗi lệnh. Học mã qua lệnh serial `rf learn <nút>`: mạch thu chỉ bật lúc học, giải mã được cùng một mã hai lần liên tiếp mới lưu vào NVS (namespace `rf`), log không in giá trị mã. Nút chưa có mã thì lệnh trả `03`. `rf verify` phát từng mã đã học rồi cho mạch thu của board tự giải lại, so với mã đã lưu, để chắc mạch phát phát đúng mã của nút đã bấm trên remote (cũng cảnh báo nếu hai nút trùng mã). Lệnh kiểm tra phần cứng: `rf selftest` (như trên nhưng với mã giả) và `rf scan` (đếm xung trên chân thu).
+
+Bài học khi thử với remote thật: remote là mã cố định, giao thức 1 của rc-switch, 24 bit, T khoảng 300 µs; đã học đủ bốn nút. Phần thu của rc-switch không dùng được: `send()` tắt bộ thu của chính đối tượng đó, và mạch thu rẻ thỉnh thoảng làm mất một xung ngắn khiến rc-switch bỏ cả khung. Vì vậy firmware tự giải mã giao thức 1 và ghép lại xung bị mất; rc-switch chỉ còn dùng để phát.
+
+Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), học mã từ app admin qua BLE (lệnh mới, dự kiến `09`, vì `08` đã giữ cho giai đoạn 7), mạch phát hiện điện lưới và đo pin.
 
 Giai đoạn 7, lỗ hổng cần sửa: "Quên thiết bị" hiện chỉ xóa khóa trên điện thoại, ô khóa vẫn nằm trong bảng của board. Lệnh `07` không cho admin tự thu hồi mình, nên admin quên thiết bị thì board không còn ai có quyền admin, và muốn lấy lại phải giữ KEY 10 giây, xóa sạch khóa của mọi máy. Cách sửa: khi quên thiết bị, app gửi lệnh mới nhờ board xóa ô của chính nó. Những điểm cần quyết khi thiết kế:
 

@@ -6,7 +6,7 @@ An ESP32-S3 sits near the door and replays the fixed codes of the original RF re
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only). The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Phase 4 in progress: the app shows a power outage from `INFO` (fake values for now); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
+> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; real RF is in progress (phase 6): codes are learned from the remote over the serial console, not yet from the app, and replayed with `rc-switch`. The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Phase 4 in progress: the app shows a power outage from `INFO` (fake values for now); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
 
 > **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
@@ -27,7 +27,7 @@ Android app  ⇄  BLE (GATT)  ⇄  ESP32-S3  →  433MHz transmitter  →  door 
 |---|---|
 | LilyGO T-Display-S3 | ESP32-S3 board, display removed |
 | MX-433 kit: FS1000A transmitter | Powered from 5V. Replays the remote's codes. Needs a 17.3cm wire antenna |
-| MX-433 kit: XY-MK-5V receiver | Powered from 5V. Only used once, to learn the codes from the remote |
+| MX-433 kit: XY-MK-5V (MX-05V) receiver | Powered from 5V. Only used once, to learn the codes from the remote |
 | 5V USB-C adapter | Main power |
 | 3.7V LiPo cell, JST 1.25mm | Backup power, for status reporting only |
 | 10kΩ and 20kΩ resistors, two of each | Voltage dividers: receiver DATA to GPIO, and mains power detection |
@@ -44,13 +44,13 @@ Both RF modules run from the board's 5V pin. The ESP32-S3 GPIOs are 3.3V only, s
 LilyGO T-Display-S3                    FS1000A (transmitter)
   5V   ──────────────────────────────  VCC
   GND  ──────────────────────────────  GND
-  GPIO (RF TX) ──────────────────────  DATA
+  GPIO13 (RF TX) ────────────────────  DATA
                                        ANT ── 17.3cm wire
 
 LilyGO T-Display-S3                    XY-MK-5V (receiver)
   5V   ──────────────────────────────  VCC
   GND  ──────────────────────────────  GND
-  GPIO (RF RX) ──┬──── 10kΩ ─────────  DATA
+  GPIO12 (RF RX) ┬──── 10kΩ ─────────  DATA
                  │
                 20kΩ
                  │
@@ -60,7 +60,7 @@ On-board buttons: BOOT = GPIO0 (hold 3 s: open pairing), KEY = GPIO14 (hold 10 s
 USB-C: 5V adapter          JST 1.25mm: 3.7V LiPo cell
 ```
 
-The RF and mains detection GPIO numbers are chosen in phase 6 and will be listed here and in `src/config.h`. Until then the firmware uses a fake RF layer and nothing needs to be connected.
+RF uses GPIO13 (transmitter DATA) and GPIO12 (receiver DATA, through the divider), set in `src/config.h`. The mains detection GPIO is chosen later in phase 6. The board's 5V pin is only live on USB power, so the RF modules are off while the board runs on the LiPo cell.
 
 ## Repository layout
 
@@ -141,7 +141,11 @@ Requires [PlatformIO](https://platformio.org/). From `firmware_esp/rolling-door-
 pio run -t upload && pio device monitor
 ```
 
-The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) and `power mains|battery [0-100]` (set the fake power status in `INFO` until phase 6 measures it).
+The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) `power mains|battery [0-100]` (set the fake power status in `INFO` until phase 6 measures it) and `rf` (learn and test the remote's codes, see below).
+
+To learn the codes, type `rf learn up` and hold the remote's Up button a few centimetres from the receiver; the code is saved once it is received twice in a row (15 s timeout, `rf cancel` stops early). Repeat for `down`, `lock` and `unlock`. `rf list` shows which buttons are learned (protocol, bit count and pulse length, never the code), `rf send <button>` transmits a code without the app, and `rf clear [button]` erases one or all codes. `rf verify` sends each learned code and decodes it with the board's own receiver, to check that the board transmits exactly the code of that remote button (it also warns if two buttons were learned with the same code). Two more commands check the hardware: `rf selftest` does the same with a made-up code, and `rf scan` logs the receiver's edge counts for 10 seconds while a remote button is pressed.
+
+Codes are transmitted with `rc-switch` but decoded by the firmware: the cheap receiver loses a short pulse in some frames, which makes `rc-switch` drop the whole frame, so the firmware decodes protocol 1 (PT2262, EV1527 and similar, 1:3 pulses with a 1:31 sync) itself and puts a lost pulse back. A rolling-code remote cannot be learned. A door command for a button with no code returns `03` (RF error).
 
 ### Android app
 
