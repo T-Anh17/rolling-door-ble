@@ -76,7 +76,7 @@ rolling-door-ble/
 
 ## BLE protocol
 
-One custom GATT service with five characteristics. The device advertises as `RollingDoor`, with the service UUID in the advertising packet. While pairing is open, the scan response also carries manufacturer data `FF FF 01`.
+One custom GATT service with five characteristics. The device advertises no name, only the service UUID in the advertising packet. While pairing is open, the scan response also carries manufacturer data `FF FF 01`.
 
 | Characteristic | UUID | Properties | Payload |
 |---|---|---|---|
