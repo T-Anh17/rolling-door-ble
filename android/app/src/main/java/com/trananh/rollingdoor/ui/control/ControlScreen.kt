@@ -5,6 +5,8 @@ import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -143,6 +145,8 @@ private fun ControlContent(
 }
 
 // The pill, "Try now" while out of range or failed, and a line saying what happens next.
+// With large text "Try now" moves below the pill instead of squeezing it.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ConnectionStatus(connection: ConnectionState, onRetry: () -> Unit) {
     val (text, tone) = when (connection) {
@@ -160,13 +164,11 @@ private fun ConnectionStatus(connection: ConnectionState, onRetry: () -> Unit) {
         else -> null
     }
     Column(verticalArrangement = Arrangement.spacedBy(DoorTheme.spacing.xxs)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            StatusPill(stringResource(text), tone, Modifier.weight(1f, fill = false))
-            if (hint != null) TextLink(stringResource(R.string.control_retry_now), onRetry)
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            StatusPill(stringResource(text), tone, Modifier.align(Alignment.CenterVertically))
+            if (hint != null) {
+                TextLink(stringResource(R.string.control_retry_now), onRetry, Modifier.align(Alignment.CenterVertically))
+            }
         }
         if (hint != null) {
             Text(stringResource(hint), style = DoorTheme.type.footnote, color = DoorTheme.colors.secondaryLabel)

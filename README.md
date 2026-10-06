@@ -157,7 +157,9 @@ BLE does not work in the emulator; use a real device.
 
 The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.
 
-Once paired, the app opens straight on the control screen: the connection status and the four buttons, nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone** for the admin, and **Forget device**, which removes the key from this phone only.
+Once paired, the app opens straight on the control screen: the connection status and the four buttons, nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone** for the admin, and **Forget device**, which removes the key from this phone only. The phone's slot stays in the device's key table; if the admin forgets the device, no phone is left with admin rights until the keys are erased with KEY. Phase 7 fixes this with a command that lets a phone leave and free its own slot.
+
+The app follows the phone's language: Vietnamese on a Vietnamese phone, English otherwise. On Android 13 and newer it can also be set for this app alone in the system's app language setting.
 
 ### Setting up a new device
 
@@ -191,7 +193,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, power status in the app
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
 - [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, fit battery and mains detection
-- [ ] **Phase 7 – More phones:** admin UI to add, rename and revoke phones
+- [ ] **Phase 7 – More phones:** admin UI to add, rename and revoke phones; a phone that forgets the device leaves and frees its slot
 
 ## Security notes
 
