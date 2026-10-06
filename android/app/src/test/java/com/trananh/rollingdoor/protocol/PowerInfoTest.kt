@@ -22,6 +22,12 @@ class PowerInfoTest {
         assertNull(PowerInfo.parse(hex("02ff")))   // unknown source
         assertNull(PowerInfo.parse(hex("0065")))   // 101 %
         assertNull(PowerInfo.parse(hex("00")))     // too short
-        assertNull(PowerInfo.parse(hex("00ff00"))) // too long
+        assertNull(PowerInfo.parse(hex("00ff000000"))) // too long
+    }
+
+    @Test
+    fun buttonBytesAreIgnored() {
+        assertEquals(PowerInfo(PowerSource.Battery, 80), PowerInfo.parse(hex("01500f")))
+        assertEquals(PowerInfo(PowerSource.Battery, 80), PowerInfo.parse(hex("01500f2a")))
     }
 }

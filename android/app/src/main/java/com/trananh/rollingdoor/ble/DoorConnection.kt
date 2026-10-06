@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.trananh.rollingdoor.crypto.CommandSigner
 import com.trananh.rollingdoor.data.SavedDevice
+import com.trananh.rollingdoor.protocol.ButtonList
 import com.trananh.rollingdoor.protocol.Command
 import com.trananh.rollingdoor.protocol.CommandFrame
 import com.trananh.rollingdoor.protocol.CommandResult
@@ -21,10 +22,13 @@ import com.trananh.rollingdoor.protocol.PowerInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -52,21 +56,50 @@ sealed interface ConnectionState {
 // phones: the ESP32 stops advertising while one phone holds the connection.
 //
 // scope must run on the main thread: start(), stop(), retryNow(), the Bluetooth receiver and the
-// connection loop all touch the same fields.
+// connection loop all touch the same fields. Only opening a link (connect to the first CHALLENGE)
+// runs on a background thread, so it goes on while the main thread draws the first frame.
+//
+// The button list is kept in buttonCache, so the screen shows it before connecting. The board's
+// list is read again only when the revision in INFO differs from the cached one.
 @SuppressLint("MissingPermission")
 class DoorConnection(
     private val context: Context,
     private val adapter: BluetoothAdapter,
     private val device: SavedDevice,
     private val signer: CommandSigner,
+    private val buttonCache: ButtonCache,
     private val scope: CoroutineScope,
 ) {
+    // Raw BUTTONS values, saved per paired device.
+    interface ButtonCache {
+        suspend fun load(): ByteArray?
+        suspend fun save(value: ByteArray)
+    }
+
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
 
     // Board power while Ready or Busy; null while not connected or not read yet.
     private val _power = MutableStateFlow<PowerInfo?>(null)
     val power: StateFlow<PowerInfo?> = _power.asStateFlow()
+
+    // Ids of the buttons the board has a code for, while Ready or Busy; null otherwise.
+    private val _learned = MutableStateFlow<Set<Int>?>(null)
+    val learned: StateFlow<Set<Int>?> = _learned.asStateFlow()
+
+    // The board's button list: cached, or read from the board. Kept while disconnected.
+    // null until the cache has loaded, and on a phone that has never read the list.
+    private val _buttons = MutableStateFlow<ButtonList?>(null)
+    val buttons: StateFlow<ButtonList?> = _buttons.asStateFlow()
+
+    private val cacheLoaded = scope.async {
+        val cached = try {
+            buttonCache.load()?.let(ButtonList::parse)
+        } catch (e: java.io.IOException) {
+            null
+        }
+        if (cached != null) _buttons.compareAndSet(null, cached)
+    }
 
     private val sendMutex = Mutex()
     private var started = false
@@ -131,6 +164,7 @@ class DoorConnection(
                 val frame = withContext(Dispatchers.Default) {
                     CommandFrame.build(device.keyId, command, args, nonce, signer)
                 }
+                if (frame.size > DoorProtocol.DEFAULT_MTU_PAYLOAD) current.ensureLargeMtu()
                 current.exchange(DoorProtocol.COMMAND_UUID, frame, command.code)
             } catch (e: BleException) {
                 // A missing STATUS or CHALLENGE leaves the nonce state unknown: start over.
@@ -143,6 +177,14 @@ class DoorConnection(
             }
         }
 
+    // After LearnRf answered Ok: waits for the board to report how learning ended, without
+    // holding the command lock, so LearnRf with LEARN_CANCEL can still be sent meanwhile.
+    // Throws BleException if the link drops or nothing arrives in time.
+    suspend fun awaitLearned(): CommandResult {
+        val current = link ?: throw BleException(LinkError.Lost, "not connected")
+        return current.awaitStatus(DoorProtocol.STATUS_RF_LEARNED, LEARN_TIMEOUT_MS)
+    }
+
     private fun startLoop() {
         stopLoop()
         loopJob = scope.launch { runLoop() }
@@ -154,6 +196,7 @@ class DoorConnection(
         loopJob = null
         link = null
         _power.value = null
+        _learned.value = null
     }
 
     // Ends only with an error the waiting connection cannot fix (no permission, wrong device
@@ -182,6 +225,7 @@ class DoorConnection(
                     if (link === opened) {
                         link = null
                         _power.value = null
+                        _learned.value = null
                     }
                     opened.close()
                 }
@@ -195,9 +239,17 @@ class DoorConnection(
         }
     }
 
-    // Reads INFO once Ready, then mirrors its notifications until the link is down.
+    // Reads INFO once Ready, then mirrors its notifications until the link is down. Reads
+    // BUTTONS whenever INFO reports a revision other than the list's.
     private suspend fun watchPower(opened: DoorLink) = coroutineScope {
         val mirror = launch { opened.power.collect { _power.value = it } }
+        val mirrorLearned = launch { opened.learned.collect { _learned.value = it } }
+        val syncButtons = launch {
+            opened.buttonsRevision.filterNotNull().collectLatest { revision ->
+                cacheLoaded.await()
+                if (_buttons.value?.revision != revision) readButtons(opened)
+            }
+        }
         try {
             opened.loadPower()
         } catch (e: BleException) {
@@ -206,6 +258,24 @@ class DoorConnection(
         }
         opened.awaitDown()
         mirror.cancel()
+        mirrorLearned.cancel()
+        syncButtons.cancel()
+    }
+
+    // A failed read leaves the old list; the next connect tries again.
+    private suspend fun readButtons(opened: DoorLink) {
+        val value = try {
+            opened.read(DoorProtocol.BUTTONS_UUID)
+        } catch (e: BleException) {
+            return
+        }
+        val list = ButtonList.parse(value) ?: return
+        _buttons.value = list
+        try {
+            buttonCache.save(value)
+        } catch (e: java.io.IOException) {
+            // Read again on the next connect.
+        }
     }
 
     // Filter logcat by tag DoorTiming. "since start" counts from start(), so it includes the
@@ -228,7 +298,7 @@ class DoorConnection(
     private suspend fun open(autoConnect: Boolean, timeoutMs: Long?): DoorLink {
         val opening = DoorLink(context, adapter.getRemoteDevice(device.mac))
         try {
-            opening.open(autoConnect, timeoutMs)
+            withContext(Dispatchers.Default) { opening.open(autoConnect, timeoutMs) }
             return opening
         } catch (e: Throwable) {
             opening.close()
@@ -238,6 +308,9 @@ class DoorConnection(
 
     private companion object {
         const val DIRECT_TIMEOUT_MS = 4_000L
+
+        // The board listens for 15 s; the margin covers the notify on a slow link.
+        const val LEARN_TIMEOUT_MS = 20_000L
         const val TIMING_TAG = "DoorTiming"
 
         // What a direct attempt reports when the device is out of range or restarting

@@ -11,10 +11,17 @@ class CommandFrameTest {
     private val signer = CommandSigner { hmacSha256(key, it) }
 
     @Test
-    fun upWithoutArgs() {
-        // python -c "import hmac,hashlib; print(hmac.new(bytes(range(32)), bytes(range(0xa0,0xb0))+b'\x01', hashlib.sha256).hexdigest()[:32])"
-        val frame = CommandFrame.build(keyId = 2, command = Command.Up, nonce = nonce, signer = signer)
-        assertArrayEquals(hex("0201" + "1913658977a9444c4da4969db023d5f1"), frame)
+    fun pingWithoutArgs() {
+        // python -c "import hmac,hashlib; print(hmac.new(bytes(range(32)), bytes(range(0xa0,0xb0))+b'\x00', hashlib.sha256).hexdigest()[:32])"
+        val frame = CommandFrame.build(keyId = 2, command = Command.Ping, nonce = nonce, signer = signer)
+        assertArrayEquals(hex("0200" + "efc243d24f7b9d18502928c00e2bab0d"), frame)
+    }
+
+    @Test
+    fun pressButtonOne() {
+        // python -c "import hmac,hashlib; print(hmac.new(bytes(range(32)), bytes(range(0xa0,0xb0))+b'\x0b\x01', hashlib.sha256).hexdigest()[:32])"
+        val frame = CommandFrame.build(keyId = 2, command = Command.Press, args = hex("01"), nonce = nonce, signer = signer)
+        assertArrayEquals(hex("020b01" + "bac138b136ba5c27b0a137e3e892146a"), frame)
     }
 
     @Test
@@ -37,7 +44,7 @@ class CommandFrameTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun rejectsLongArgs() {
-        CommandFrame.build(0, Command.Ping, args = ByteArray(17), nonce = nonce, signer = signer)
+        CommandFrame.build(0, Command.Ping, args = ByteArray(35), nonce = nonce, signer = signer)
     }
 
     @Test(expected = IllegalArgumentException::class)

@@ -3,6 +3,7 @@ package com.trananh.rollingdoor.ble
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.os.SystemClock
+import com.trananh.rollingdoor.protocol.ButtonInfo
 import com.trananh.rollingdoor.protocol.CommandResult
 import com.trananh.rollingdoor.protocol.DoorProtocol
 import com.trananh.rollingdoor.protocol.PowerInfo
@@ -30,9 +31,19 @@ class DoorLink(context: Context, device: BluetoothDevice) {
     private val statuses = Channel<ByteArray>(Channel.UNLIMITED)
     private val down = CompletableDeferred<Unit>()
     private val _power = MutableStateFlow<PowerInfo?>(null)
+    private val _learned = MutableStateFlow<Set<Int>?>(null)
+    private val _buttonsRevision = MutableStateFlow<Int?>(null)
+    @Volatile private var mtuRaised = false
 
     // Board power from INFO; null until loadPower() has read it, or if the value is not understood.
     val power: StateFlow<PowerInfo?> = _power.asStateFlow()
+
+    // Ids of the buttons the board has a code for, also from INFO; null until read, or on
+    // firmware that does not report them.
+    val learned: StateFlow<Set<Int>?> = _learned.asStateFlow()
+
+    // Revision of the board's button list, also from INFO; null until read.
+    val buttonsRevision: StateFlow<Int?> = _buttonsRevision.asStateFlow()
 
     // How long open() spent in connect and in the steps after it, for timing logs.
     var connectMs = 0L
@@ -50,7 +61,11 @@ class DoorLink(context: Context, device: BluetoothDevice) {
                 DoorProtocol.CHALLENGE_UUID ->
                     if (value.size == DoorProtocol.NONCE_LENGTH) nonce.value = NonceState.Fresh(value)
                 DoorProtocol.STATUS_UUID -> statuses.trySend(value)
-                DoorProtocol.INFO_UUID -> _power.value = PowerInfo.parse(value)
+                DoorProtocol.INFO_UUID -> {
+                    _power.value = PowerInfo.parse(value)
+                    _learned.value = ButtonInfo.learned(value)
+                    _buttonsRevision.value = ButtonInfo.revision(value)
+                }
             }
         }
 
@@ -63,6 +78,7 @@ class DoorLink(context: Context, device: BluetoothDevice) {
     // connectTimeoutMs = null with autoConnect waits until the device comes into range.
     // largeMtu is only needed for pairing: daily frames fit the default MTU, and the exchange
     // costs ~0.65 s on every connect.
+    // Safe to call from any thread; connectMs, setupMs and steps are read only after it returns.
     suspend fun open(
         autoConnect: Boolean = false,
         connectTimeoutMs: Long? = DIRECT_CONNECT_TIMEOUT_MS,
@@ -77,7 +93,10 @@ class DoorLink(context: Context, device: BluetoothDevice) {
         // keeps it short while the link is up (only while the app is on screen), so a command's
         // write and STATUS notify take a few ms instead of a couple of ~49 ms events.
         gatt.requestHighPriority()
-        if (largeMtu) timed(timings, "mtu") { gatt.requestMtu(MTU) }
+        if (largeMtu) {
+            timed(timings, "mtu") { gatt.requestMtu(MTU) }
+            mtuRaised = true
+        }
         timed(timings, "discover") { gatt.discoverServices() }
         timed(timings, "notify challenge") {
             gatt.enableNotifications(DoorProtocol.SERVICE_UUID, DoorProtocol.CHALLENGE_UUID)
@@ -104,6 +123,16 @@ class DoorLink(context: Context, device: BluetoothDevice) {
         val value = gatt.read(DoorProtocol.SERVICE_UUID, DoorProtocol.INFO_UUID)
         // A notify that arrived meanwhile is newer than the read; keep it.
         _power.compareAndSet(null, PowerInfo.parse(value))
+        _learned.compareAndSet(null, ButtonInfo.learned(value))
+        _buttonsRevision.compareAndSet(null, ButtonInfo.revision(value))
+    }
+
+    // Asks for a large MTU once per link, before the first write that does not fit the default.
+    // Daily connects skip it: the exchange costs ~0.65 s and only SET_BUTTON needs it.
+    suspend fun ensureLargeMtu() {
+        if (mtuRaised) return
+        gatt.requestMtu(MTU)
+        mtuRaised = true
     }
 
     // Waits for a nonce no frame has used yet and marks it used.
@@ -121,7 +150,13 @@ class DoorLink(context: Context, device: BluetoothDevice) {
     suspend fun exchange(characteristic: UUID, value: ByteArray, command: Byte): CommandResult {
         while (statuses.tryReceive().isSuccess) Unit // drop anything left from an earlier frame
         gatt.write(DoorProtocol.SERVICE_UUID, characteristic, value)
-        val status = withTimeoutOrNull(STATUS_TIMEOUT_MS) {
+        return awaitStatus(command, STATUS_TIMEOUT_MS)
+    }
+
+    // Waits for a STATUS [command][result] the device sends on its own, such as the end of RF
+    // learning. Statuses for other commands are skipped.
+    suspend fun awaitStatus(command: Byte, timeoutMs: Long): CommandResult {
+        val status = withTimeoutOrNull(timeoutMs) {
             var status: ByteArray
             do {
                 status = statuses.receiveCatching().getOrNull() ?: throw BleException(LinkError.Lost)
@@ -158,8 +193,9 @@ class DoorLink(context: Context, device: BluetoothDevice) {
     }
 
     private companion object {
-        // For the 82-byte PAIRING request and its longer response; NimBLE accepts up to ~255.
-        // COMMAND (18 bytes without args), CHALLENGE and STATUS fit the default 23.
+        // For the 82-byte PAIRING request and its longer response, and SET_BUTTON (up to 52
+        // bytes); NimBLE accepts up to ~255. Other commands, CHALLENGE and STATUS fit the
+        // default 23. Reads of BUTTONS are long reads and work with either.
         const val MTU = 247
         const val STATUS_TIMEOUT_MS = 3_000L
         const val DIRECT_CONNECT_TIMEOUT_MS = 10_000L

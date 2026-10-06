@@ -1,6 +1,7 @@
 package com.trananh.rollingdoor.data
 
 import android.content.Context
+import android.util.Base64
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -69,6 +70,17 @@ class DeviceRepository(
         if (!complete) forget()
     }
 
+    // The device's last BUTTONS value, so the control screen shows the buttons before it
+    // connects. Cleared with the device.
+    suspend fun cachedButtons(): ByteArray? =
+        dataStore.data.first()[BUTTONS]?.let { Base64.decode(it, Base64.NO_WRAP) }
+
+    suspend fun saveButtons(value: ByteArray) {
+        dataStore.edit { prefs ->
+            if (prefs[MAC] != null) prefs[BUTTONS] = Base64.encodeToString(value, Base64.NO_WRAP)
+        }
+    }
+
     // Local only: the key slot on the ESP32 stays until an admin revokes it or the device is wiped.
     suspend fun forget() {
         withContext(Dispatchers.IO) { keyStore.deleteKey() }
@@ -87,5 +99,6 @@ class DeviceRepository(
         val KEY_ID = intPreferencesKey("key_id")
         val ROLE = intPreferencesKey("role")
         val CONFIRMED = booleanPreferencesKey("confirmed")
+        val BUTTONS = stringPreferencesKey("buttons")
     }
 }

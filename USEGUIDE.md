@@ -7,7 +7,7 @@ Tài liệu này dành cho người (và trợ lý AI) làm việc trên repo. �
 Điều khiển cửa cuốn 433MHz bằng điện thoại Android qua Bluetooth Low Energy.
 
 - ESP32-S3 đặt gần cửa, phát lại mã cố định của remote RF gốc, giống như một remote thứ hai. Không đấu dây vào hộp điều khiển cửa.
-- App Android kết nối BLE, hiện bốn nút như remote: Lên, Xuống, Khóa, Mở khóa. Remote không có nút Dừng: bấm Khóa khi cửa đang chạy thì cửa dừng, phải bấm Mở khóa rồi mới Lên hoặc Xuống được.
+- App Android kết nối BLE, mặc định hiện bốn nút như remote: Lên, Xuống, Khóa, Mở khóa. Remote không có nút Dừng: bấm Khóa khi cửa đang chạy thì cửa dừng, phải bấm Mở khóa rồi mới Lên hoặc Xuống được. Admin thêm, sửa, xóa được nút (tối đa 8), mỗi nút có tên, biểu tượng và mã RF riêng; danh sách nút lưu trên board nên máy nào cũng thấy giống nhau.
 - BLE là kênh điều khiển duy nhất. WiFi mặc định tắt, chỉ bật khi cập nhật firmware (OTA).
 - Mọi lệnh được xác thực bằng khóa riêng của từng điện thoại (HMAC-SHA256) và nonce dùng một lần. Ghép đôi bằng mã QR do từng board tự sinh.
 - Giao thức BLE và cách ghép đôi mô tả đầy đủ trong README.md. Sửa giao thức thì sửa cả firmware, app và README trong cùng một giai đoạn.
@@ -36,6 +36,7 @@ rolling-door-ble/
 │       ├── auth.*, key_store.*               Kiểm tra HMAC, bảng 8 khóa trong NVS
 │       ├── pairing.*, device_secret.*        Ghép đôi, setup secret và chuỗi QR
 │       ├── protocol.*, buttons.*, console.*  Mã lệnh, nút BOOT/KEY, lệnh serial
+│       ├── remote_buttons.*                  Danh sách nút điều khiển (id, biểu tượng, tên) trong NVS
 │       ├── rf.h, rf.cpp                      Lớp RF: phát bằng rc-switch, tự giải mã lúc học mã, lưu mã trong NVS
 │       └── power.h, power_fake.cpp           Trạng thái nguồn cho INFO (hiện là bản giả, đặt bằng lệnh serial)
 ├── tools/qr-viewer.html                      Đọc mã QR từ board qua Web Serial
@@ -146,7 +147,11 @@ Giai đoạn 6, đã làm (nhánh `esp32`): thay lớp RF giả bằng `rc-switc
 
 Bài học khi thử với remote thật: remote là mã cố định, giao thức 1 của rc-switch, 24 bit, T khoảng 300 µs; đã học đủ bốn nút. Phần thu của rc-switch không dùng được: `send()` tắt bộ thu của chính đối tượng đó, và mạch thu rẻ thỉnh thoảng làm mất một xung ngắn khiến rc-switch bỏ cả khung. Vì vậy firmware tự giải mã giao thức 1 và ghép lại xung bị mất; rc-switch chỉ còn dùng để phát.
 
-Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), học mã từ app admin qua BLE (lệnh mới, dự kiến `09`, vì `08` đã giữ cho giai đoạn 7), mạch phát hiện điện lưới và đo pin.
+Giai đoạn 6, học mã từ app admin (firmware ở nhánh `esp32`, app ở nhánh `android`): lệnh `09` với `[01–04]` bật mạch thu cho nút đó, `[00]` hủy. Board trả `09 00` khi bắt đầu nghe, rồi notify `STATUS` `81 00` khi lưu được mã hoặc `81 03` khi hết 15 giây. Máy admin ngắt kết nối thì board tự hủy. Lệnh `0A` `[01–04]` xóa mã một nút (trả `03` nếu đang học). `INFO` thêm byte thứ 3 là bitmask nút đã học, notify lại khi học hay xóa mã (cả qua serial). Trong app: Cài đặt, Học lệnh remote, danh sách bốn nút, chạm một dòng để học (hoặc học lại); nút chưa học có nút Học lệnh ở cuối dòng, nút đã học ghi Đã học kèm thùng rác để xóa mã; đóng sheet giữa chừng thì gửi `09 00`. Lệnh serial `rf ...` giữ nguyên. Đã chạy thử trên tablet với board và remote thật: học được, hết 15 giây, hủy giữa chừng, không bấm remote thì sau 15 giây báo không bắt được mã và giữ nguyên trạng thái, xóa rồi bấm nút đó thì app báo "Nút này chưa học lệnh" (app tự phân biệt lỗi `03` nhờ byte nút đã học trong `INFO`: nút đã học mà bị `03` thì là board đang bận), học lại thì `rf verify` OK cả bốn nút.
+
+Giai đoạn 6, nút tùy chỉnh (firmware ở nhánh `esp32`, app ở nhánh `android`): board giữ tối đa 8 nút trong NVS (namespace `buttons`), mỗi nút có id 1–8 (cũng là ô mã RF, key `c1`–`c8` trong namespace `rf`; mã học trước đó dưới key `UP`, `DOWN`, `LOCK`, `UNLOCK` tự chuyển sang nút 1–4 lần khởi động đầu), biểu tượng (10 loại, màu theo biểu tượng) và tên UTF-8 tối đa 32 byte. Board mới có sẵn bốn nút mặc định, tên trống, app hiện tên của biểu tượng theo ngôn ngữ máy. Lệnh mới: `0B` bấm nút `[id]` (`01`–`04` vẫn bấm nút 1–4), `0C` thêm hoặc sửa nút `[id][biểu tượng][tên]`, `0D` xóa nút cùng mã của nó; `09`, `0A` nhận id 1–8. Args tăng lên 34 byte, nên app xin MTU lớn trước khi gửi `0C` (chỉ lệnh này vượt MTU mặc định). Characteristic mới `BUTTONS` (`…0007`, chỉ đọc) trả về danh sách; `INFO` thêm byte thứ 4 là số phiên bản danh sách, board notify `INFO` trước `STATUS` của lệnh. App lưu danh sách trong DataStore và chỉ đọc lại khi số phiên bản đổi. Trong app: Cài đặt, Nút điều khiển, danh sách nút và Thêm nút; trang của từng nút gồm tên, biểu tượng, Lưu, Học lệnh (xóa lệnh ở cuối dòng) và Xóa nút (có bước xác nhận). Màn điều khiển xếp 2 nút một hàng, các hàng chia đều chiều cao, nút lẻ cuối chiếm cả hàng. Lệnh serial: `buttons`, `rf learn <1-8>`. Đã build firmware và app, unit test qua; chưa chạy thử trên board.
+
+Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), mạch phát hiện điện lưới và đo pin.
 
 Giai đoạn 7, lỗ hổng cần sửa: "Quên thiết bị" hiện chỉ xóa khóa trên điện thoại, ô khóa vẫn nằm trong bảng của board. Lệnh `07` không cho admin tự thu hồi mình, nên admin quên thiết bị thì board không còn ai có quyền admin, và muốn lấy lại phải giữ KEY 10 giây, xóa sạch khóa của mọi máy. Cách sửa: khi quên thiết bị, app gửi lệnh mới nhờ board xóa ô của chính nó. Những điểm cần quyết khi thiết kế:
 

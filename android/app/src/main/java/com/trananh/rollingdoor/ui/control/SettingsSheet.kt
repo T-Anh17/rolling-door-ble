@@ -12,9 +12,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.SettingsRemote
+import androidx.compose.material.icons.rounded.Watch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +30,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import com.trananh.rollingdoor.R
 import com.trananh.rollingdoor.data.SavedDevice
+import com.trananh.rollingdoor.protocol.ButtonIcon
+import com.trananh.rollingdoor.protocol.ButtonList
+import com.trananh.rollingdoor.protocol.RemoteButton
 import com.trananh.rollingdoor.protocol.Role
 import com.trananh.rollingdoor.tile.QuickTile
 import com.trananh.rollingdoor.ui.components.BottomSheet
@@ -38,34 +44,110 @@ import com.trananh.rollingdoor.ui.theme.DoorTheme
 import com.trananh.rollingdoor.ui.theme.ElevatedColors
 import com.trananh.rollingdoor.ui.theme.RollingDoorTheme
 
+// Admin's button editing and code learning, on their own pages of the sheet.
+class ButtonActions(
+    val buttons: ButtonList,
+    val learned: Set<Int>?,
+    val learning: RfLearning,
+    val editing: ButtonEditing,
+    val onSave: (RemoteButton) -> Unit,
+    val onDelete: (Int) -> Unit,
+    val onLearn: (Int) -> Unit,
+    val onClear: (Int) -> Unit,
+    val onCancelLearn: () -> Unit,
+    val onLeave: () -> Unit, // forgets the last results
+)
+
+private enum class SettingsPage { Main, Buttons, Edit, Delete, Forget }
+
 // Device info, admin actions, the Quick Settings tile and Forget device, kept off the control screen.
-//   canAddPhone: connected and no command in flight
+//   canAddPhone: connected and no command in flight (also gates editing and learning)
 //   addingPhone: Add phone is in flight
-// Forget device asks first, in the same sheet.
+// Buttons, one button's page, Delete button and Forget device open in the same sheet.
 @Composable
 fun SettingsSheet(
     device: SavedDevice,
     canAddPhone: Boolean,
     addingPhone: Boolean,
     onAddPhone: () -> Unit,
+    buttons: ButtonActions,
     onForget: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var confirmingForget by rememberSaveable { mutableStateOf(false) }
+    var page by rememberSaveable { mutableStateOf(SettingsPage.Main) }
+    var editId by rememberSaveable { mutableStateOf(0) }
     val quickTile = rememberQuickTileRow()
-    val title = stringResource(if (confirmingForget) R.string.settings_forget_title else R.string.settings_title)
+    val list = buttons.buttons
+    val editing = list[editId]
+    val goTo = { next: SettingsPage ->
+        buttons.onLeave()
+        page = next
+    }
+    // A deleted button has no page left to show.
+    LaunchedEffect(buttons.editing.result) {
+        if (buttons.editing.result?.outcome == EditOutcome.Deleted && page == SettingsPage.Delete) {
+            goTo(SettingsPage.Buttons)
+        }
+    }
+    val title = stringResource(
+        when (page) {
+            SettingsPage.Main -> R.string.settings_title
+            SettingsPage.Buttons -> R.string.buttons_title
+            SettingsPage.Edit -> if (editing == null) R.string.edit_title_new else R.string.edit_title
+            SettingsPage.Delete -> R.string.delete_title
+            SettingsPage.Forget -> R.string.settings_forget_title
+        },
+    )
     BottomSheet(onDismiss = onDismiss, title = title, grouped = true) {
-        if (confirmingForget) {
-            ForgetConfirmation(onForget, onCancel = { confirmingForget = false })
-        } else {
-            SettingsGroups(
+        when (page) {
+            SettingsPage.Main -> SettingsGroups(
                 device,
                 canAddPhone,
                 addingPhone,
                 onAddPhone,
+                onOpenButtons = { page = SettingsPage.Buttons },
                 quickTile,
-                onForget = { confirmingForget = true },
+                onForget = { page = SettingsPage.Forget },
             )
+            SettingsPage.Buttons -> ButtonsPage(
+                list,
+                buttons.learned,
+                onOpen = { id ->
+                    editId = id
+                    goTo(SettingsPage.Edit)
+                },
+                onAdd = {
+                    editId = list.freeId() ?: return@ButtonsPage
+                    goTo(SettingsPage.Edit)
+                },
+                onDone = { page = SettingsPage.Main },
+            )
+            SettingsPage.Edit -> EditButtonPage(
+                editId,
+                saved = editing,
+                // A new button starts with an icon no other button uses.
+                newIcon = ButtonIcon.entries.firstOrNull { icon -> list.buttons.none { it.icon == icon } }
+                    ?: ButtonIcon.Power,
+                buttons.learned,
+                buttons.learning,
+                buttons.editing,
+                canEdit = canAddPhone,
+                onSave = buttons.onSave,
+                onLearn = buttons.onLearn,
+                onClear = buttons.onClear,
+                onCancelLearn = buttons.onCancelLearn,
+                onDelete = { goTo(SettingsPage.Delete) },
+                onDone = { goTo(SettingsPage.Buttons) },
+            )
+            SettingsPage.Delete -> DeleteButtonPage(
+                name = editing?.displayName() ?: "",
+                deleting = buttons.editing.deleting == editId,
+                failed = buttons.editing.result?.takeIf { it.button == editId }?.outcome,
+                canEdit = canAddPhone,
+                onDelete = { buttons.onDelete(editId) },
+                onCancel = { goTo(SettingsPage.Edit) },
+            )
+            SettingsPage.Forget -> ForgetConfirmation(onForget, onCancel = { page = SettingsPage.Main })
         }
     }
 }
@@ -76,6 +158,7 @@ private fun SettingsGroups(
     canAddPhone: Boolean,
     addingPhone: Boolean,
     onAddPhone: () -> Unit,
+    onOpenButtons: () -> Unit,
     quickTile: QuickTileRow?,
     onForget: () -> Unit,
 ) {
@@ -87,12 +170,14 @@ private fun SettingsGroups(
         row(address, value = device.mac)
         if (device.role == Role.Admin) row(role, value = admin)
     }
+    // Admin actions share one card. Add phone says what it opened in the banner, so it needs
+    // no footer. Add watch is a placeholder until the Wear OS app exists.
     if (device.role == Role.Admin) {
         val addPhone = stringResource(R.string.settings_add_phone)
-        ListGroup(
-            header = stringResource(R.string.settings_section_admin),
-            footer = stringResource(R.string.settings_add_phone_footer),
-        ) {
+        val addWatch = stringResource(R.string.settings_add_watch)
+        val comingSoon = stringResource(R.string.settings_coming_soon)
+        val buttons = stringResource(R.string.buttons_title)
+        ListGroup(header = stringResource(R.string.settings_section_admin)) {
             row(
                 addPhone,
                 icon = Icons.Rounded.PersonAdd,
@@ -100,6 +185,8 @@ private fun SettingsGroups(
                 enabled = canAddPhone,
                 onClick = onAddPhone,
             )
+            row(addWatch, icon = Icons.Rounded.Watch, value = comingSoon)
+            row(buttons, icon = Icons.Rounded.SettingsRemote, chevron = true, onClick = onOpenButtons)
         }
     }
     if (quickTile != null) {
@@ -157,7 +244,7 @@ private fun ForgetConfirmation(onForget: () -> Unit, onCancel: () -> Unit) {
 
 // The sheet body without the modal window, which previews cannot show.
 @Composable
-private fun SheetPreview(content: @Composable ColumnScope.() -> Unit) = RollingDoorTheme {
+internal fun SheetPreview(content: @Composable ColumnScope.() -> Unit) = RollingDoorTheme {
     ElevatedColors {
         Column(
             Modifier
@@ -181,6 +268,7 @@ private fun SettingsAdminPreview() = SheetPreview {
         canAddPhone = true,
         addingPhone = false,
         onAddPhone = {},
+        onOpenButtons = {},
         quickTile = QuickTileRow(added = false) {},
         onForget = {},
     )
@@ -189,7 +277,7 @@ private fun SettingsAdminPreview() = SheetPreview {
 @DoorPreviews
 @Composable
 private fun SettingsNormalPreview() = SheetPreview {
-    SettingsGroups(PreviewDevice.copy(keyId = 1, role = Role.Normal), false, false, {}, QuickTileRow(true) {}, {})
+    SettingsGroups(PreviewDevice.copy(keyId = 1, role = Role.Normal), false, false, {}, {}, QuickTileRow(true) {}, {})
 }
 
 @DoorPreviews
