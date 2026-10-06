@@ -54,6 +54,13 @@ constexpr uint8_t kWipePin = 14;  // hold to erase all phone keys
 constexpr uint32_t kBootHoldMs = 3 * 1000;
 constexpr uint32_t kWipeHoldMs = 10 * 1000;
 
+// RF 433MHz. TX drives the FS1000A DATA pin directly; RX reads the XY-MK-5V DATA through
+// a 10k/20k divider (the receiver runs from 5V).
+constexpr uint8_t kRfTxPin = 13;
+constexpr uint8_t kRfRxPin = 12;
+constexpr uint8_t kRfRepeat = 10;  // frames per command, like holding the remote button briefly
+constexpr uint32_t kRfLearnTimeoutMs = 15 * 1000;
+
 constexpr size_t kEventQueueDepth = 6;
 
 }  // namespace config

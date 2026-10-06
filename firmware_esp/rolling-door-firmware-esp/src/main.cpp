@@ -135,7 +135,7 @@ void setup() {
   Serial.setTxTimeoutMs(0);
   delay(500);
   Serial.println();
-  Serial.println("=== rolling-door-ble firmware, phase 2 ===");
+  Serial.println("=== rolling-door-ble firmware, phase 6 ===");
 
   device_secret::begin();
   key_store::begin();
@@ -175,6 +175,7 @@ void loop() {
   }
 
   updatePower();
+  rf::poll();
 
   const bool open = pairing::isOpen();
   if (open != pairingAdvertised) {
