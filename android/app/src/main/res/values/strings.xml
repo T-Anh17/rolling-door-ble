@@ -74,13 +74,14 @@
     <string name="control_status_out_of_range">Out of range</string>
     <string name="control_status_bluetooth_off">Bluetooth is off</string>
     <string name="control_status_failed">Cannot connect</string>
-    <string name="control_status_power_out">Power outage</string>
     <string name="control_retry_now">Try now</string>
     <string name="control_hint_out_of_range">Connects by itself when you are near the door.</string>
     <string name="control_hint_failed">Check that the device has power, then try again.</string>
+    <string name="control_hint_none_learned">No remote codes learned yet, so the buttons don\'t work.</string>
+    <string name="control_hint_none_learned_normal">No remote codes learned yet, so the buttons don\'t work. Ask the admin to learn them.</string>
+    <string name="control_hint_some_not_learned">Dimmed buttons have no code yet.</string>
+    <string name="control_learn_codes">Learn codes</string>
     <string name="control_hint_unsupported">The device firmware does not match the app.</string>
-    <string name="control_hint_power_out">The door cannot move without power.</string>
-    <string name="control_hint_power_out_battery">The door cannot move without power. Device battery: %1$d%%.</string>
     <string name="control_message_no_reply">The door did not answer. Check the door before trying again.</string>
     <string name="control_message_key_rejected">The device no longer accepts this phone. Pair it again.</string>
     <string name="control_message_locked_out">Too many failed attempts. Wait 1 minute and try again.</string>
@@ -99,6 +100,9 @@
     <string name="settings_address">Address</string>
     <string name="settings_role">Role</string>
     <string name="settings_role_admin">Admin</string>
+    <string name="settings_battery">Battery</string>
+    <string name="settings_battery_charging">Charging</string>
+    <string name="settings_battery_percent">%1$d%%</string>
     <string name="settings_section_admin">Admin</string>
     <string name="settings_add_phone">Add phone</string>
     <string name="settings_add_watch">Add watch</string>
@@ -150,7 +154,7 @@
     <string name="make_admin_failed">Couldn\'t hand over. Try again.</string>
     <string name="forget_must_hand_over">Make another phone the admin first, in Phones.</string>
     <string name="forget_offline">Can\'t reach the device. This phone keeps its place on the device until the admin revokes it.</string>
-    <string name="forget_offline_admin">Move closer to the device and try again. Forgetting now would leave the device without an admin.</string>
+    <string name="forget_offline_admin">Can\'t reach the device. If you forget it now, it has no admin: to get one back, hold KEY on the device for 10 seconds, which unpairs every phone. If the device is broken, forget it.</string>
     <string name="forget_failed">Couldn\'t forget. Try again.</string>
     <string name="forget_anyway">Forget anyway</string>
     <string name="invite_hint">On the new phone, open the app and scan this code, or tap Enter a code and type the 8 digits.</string>

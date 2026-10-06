@@ -33,6 +33,7 @@ import com.trananh.rollingdoor.data.SavedDevice
 import com.trananh.rollingdoor.protocol.ButtonIcon
 import com.trananh.rollingdoor.protocol.ButtonList
 import com.trananh.rollingdoor.protocol.PairedPhone
+import com.trananh.rollingdoor.protocol.PowerInfo
 import com.trananh.rollingdoor.protocol.RemoteButton
 import com.trananh.rollingdoor.protocol.Role
 import com.trananh.rollingdoor.tile.QuickTile
@@ -77,17 +78,21 @@ class PhoneActions(
 private enum class SettingsPage { Main, Buttons, Edit, Delete, Phones, Phone, Invite, Revoke, MakeAdmin, Forget }
 
 // Device info, admin actions, the Quick Settings tile and Forget device, kept off the control screen.
+//   startAtButtons: open on Buttons (from the control screen's "Learn codes")
+//   power: the board's battery while connected, else null
 //   canAddPhone: connected and no command in flight (also gates editing and learning)
 // Buttons, Phones, their pages and confirmations, and Forget device open in the same sheet.
 @Composable
 fun SettingsSheet(
     device: SavedDevice,
+    startAtButtons: Boolean,
+    power: PowerInfo?,
     canAddPhone: Boolean,
     buttons: ButtonActions,
     phones: PhoneActions,
     onDismiss: () -> Unit,
 ) {
-    var page by rememberSaveable { mutableStateOf(SettingsPage.Main) }
+    var page by rememberSaveable { mutableStateOf(if (startAtButtons) SettingsPage.Buttons else SettingsPage.Main) }
     var editId by rememberSaveable { mutableStateOf(0) }
     var phoneId by rememberSaveable { mutableStateOf(0) }
     val phone = phones.phones.list?.get(phoneId)
@@ -130,6 +135,7 @@ fun SettingsSheet(
         when (page) {
             SettingsPage.Main -> SettingsGroups(
                 device,
+                power,
                 onOpenPhones = { page = SettingsPage.Phones },
                 onOpenButtons = { page = SettingsPage.Buttons },
                 quickTile,
@@ -252,6 +258,7 @@ private fun PhonesState.failedWith(keyId: Int, outcome: PhoneOutcome, text: Int)
 @Composable
 private fun SettingsGroups(
     device: SavedDevice,
+    power: PowerInfo?,
     onOpenPhones: () -> Unit,
     onOpenButtons: () -> Unit,
     quickTile: QuickTileRow?,
@@ -260,10 +267,18 @@ private fun SettingsGroups(
     val address = stringResource(R.string.settings_address)
     val role = stringResource(R.string.settings_role)
     val admin = stringResource(R.string.settings_role_admin)
+    val batteryLabel = stringResource(R.string.settings_battery)
+    // On USB the board cannot measure its cell, so it only says it is charging.
+    val battery = when {
+        power?.charging == true -> stringResource(R.string.settings_battery_charging)
+        power?.batteryPercent != null -> stringResource(R.string.settings_battery_percent, power.batteryPercent)
+        else -> null
+    }
     // Only the admin phone shows its role; a normal phone has nothing to act on.
     ListGroup(header = stringResource(R.string.settings_section_device)) {
         row(address, value = device.mac)
         if (device.role == Role.Admin) row(role, value = admin)
+        if (battery != null) row(batteryLabel, value = battery)
     }
     // Admin actions share one card; Add phone is on the Phones page. Add watch is a placeholder
     // until the Wear OS app exists.
@@ -316,7 +331,8 @@ private fun rememberQuickTileRow(): QuickTileRow? {
 }
 
 // Forget asks the board to free this phone's slot first; the footer says why it did not.
-// Offline: a normal phone may forget anyway. MustHandOver: the admin opens Phones from here.
+// Offline (also the admin's, for a broken board): forget anyway. MustHandOver: the admin, still
+// connected with other phones paired, opens Phones from here.
 @Composable
 private fun ForgetConfirmation(
     leave: LeaveState?,
@@ -345,7 +361,7 @@ private fun ForgetConfirmation(
     val leaving = leave == LeaveState.Leaving
     ListGroup(footer = footer) {
         when (leave) {
-            LeaveState.Offline ->
+            LeaveState.Offline, LeaveState.OfflineAdmin ->
                 row(anyway, icon = Icons.Rounded.Delete, style = ListRowStyle.Destructive, onClick = onForgetAnyway)
             LeaveState.MustHandOver ->
                 row(phones, icon = Icons.Rounded.Smartphone, chevron = true, onClick = onOpenPhones)
@@ -385,6 +401,7 @@ private val PreviewDevice = SavedDevice(mac = "00:11:22:33:44:55", keyId = 0, ro
 private fun SettingsAdminPreview() = SheetPreview {
     SettingsGroups(
         PreviewDevice,
+        PowerInfo(null, charging = true),
         onOpenPhones = {},
         onOpenButtons = {},
         quickTile = QuickTileRow(added = false) {},
@@ -395,7 +412,7 @@ private fun SettingsAdminPreview() = SheetPreview {
 @DoorPreviews
 @Composable
 private fun SettingsNormalPreview() = SheetPreview {
-    SettingsGroups(PreviewDevice.copy(keyId = 1, role = Role.Normal), {}, {}, QuickTileRow(true) {}, {})
+    SettingsGroups(PreviewDevice.copy(keyId = 1, role = Role.Normal), PowerInfo(80), {}, {}, QuickTileRow(true) {}, {})
 }
 
 @DoorPreviews

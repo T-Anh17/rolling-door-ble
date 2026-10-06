@@ -29,10 +29,10 @@ Android app  ⇄  BLE (GATT)  ⇄  ESP32-S3  →  433MHz transmitter  →  door 
 | MX-433 kit: FS1000A transmitter | Powered from 5V. Replays the remote's codes. Needs a 17.3cm wire antenna |
 | MX-433 kit: XY-MK-5V (MX-05V) receiver | Powered from 5V. Only used once, to learn the codes from the remote |
 | 5V USB-C adapter | Main power |
-| 3.7V LiPo cell, JST 1.25mm | Backup power, for status reporting only |
-| 10kΩ and 20kΩ resistors, two of each | Voltage dividers: receiver DATA to GPIO, and mains power detection |
+| 3.7V LiPo cell, JST 1.25mm | Backup power: keeps the board up through a power cut |
+| 10kΩ and 20kΩ resistors | Voltage divider: receiver DATA to GPIO |
 
-The door has no backup battery, so it does not move during a power cut. The LiPo cell only keeps the ESP32 alive so the app can show "power outage" instead of failing to connect.
+The door has no backup battery, so it does not move during a power cut. The LiPo cell only keeps the ESP32 alive, so the phones stay paired and it is ready when power comes back. The board measures the cell on GPIO4 (the T-Display-S3's own divider) and the app shows it in Settings. On USB that pin sees the charger instead of the cell, so the board then reports "charging" rather than a percent.
 
 The remote's frequency still has to be confirmed from the marking on its SAW resonator (433.92MHz is assumed).
 
@@ -60,7 +60,7 @@ On-board buttons: BOOT = GPIO0 (hold 3 s: open pairing), KEY = GPIO14 (hold 10 s
 USB-C: 5V adapter          JST 1.25mm: 3.7V LiPo cell
 ```
 
-RF uses GPIO13 (transmitter DATA) and GPIO12 (receiver DATA, through the divider), set in `src/config.h`. The mains detection GPIO is chosen later in phase 6. The board's 5V pin is only live on USB power, so the RF modules are off while the board runs on the LiPo cell.
+RF uses GPIO13 (transmitter DATA) and GPIO12 (receiver DATA, through the divider), set in `src/config.h`. The board's 5V pin is only live on USB power, so the RF modules are off while the board runs on the LiPo cell.
 
 ## Repository layout
 
@@ -86,7 +86,7 @@ The device takes up to three phones at once and keeps advertising while it has r
 | `CHALLENGE` | `a7930002-966e-4240-b881-5c2e2f2203a8` | read, notify | 16-byte random nonce for this connection, replaced after each of its commands and pairing requests |
 | `COMMAND` | `a7930003-966e-4240-b881-5c2e2f2203a8` | write | `[key id][command][args 0–34 bytes][mac 16 bytes]`; only `0C` is longer than the default MTU allows, and the app asks for a larger MTU before sending it |
 | `STATUS` | `a7930004-966e-4240-b881-5c2e2f2203a8` | notify | `[command][result]`; `80` as the command means a pairing request, `81` the end of RF learning |
-| `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[power source: 00 mains, 01 battery][battery percent: 0–100, FF not measured][learned buttons: bit n = button n + 1][button list revision]`, notified when it changes |
+| `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[00][battery: 0–100 percent on battery, FE on USB (charging), FF no cell][learned buttons: bit n = button n + 1][button list revision]`. The first byte once said mains or battery and is always `00` now, notified when it changes |
 | `PAIRING` | `a7930006-966e-4240-b881-5c2e2f2203a8` | read, write | Key exchange, see [Pairing](#pairing) |
 | `BUTTONS` | `a7930007-966e-4240-b881-5c2e2f2203a8` | read | `[revision]` then, per button in display order, `[id 1–8][icon][name length 0–32][name UTF-8]` (a long read, up to 281 bytes) |
 | `PHONES` | `a7930008-966e-4240-b881-5c2e2f2203a8` | read | Empty until this connection sends `0E`, then `[count]` and, per phone by key id, `[key id][role: 01 admin, 00 normal][name length 0–32][name UTF-8]` (a long read, up to 281 bytes). Other connections read it empty |
@@ -146,7 +146,7 @@ Pairing works like a camera: scan the device's QR code with the app. There is no
 - The first phone to pair becomes the admin; later phones are normal.
 - Only the admin can update firmware, configure WiFi, learn RF codes, and add, rename or revoke phones. There is one admin at a time; it can hand the role to another phone (`10`).
 - Each phone has a name of up to 32 bytes, kept on the device. The app sets it to the phone's device name when it pairs; the admin can change it. An unnamed phone shows as "Phone <slot + 1>".
-- Forgetting the device in the app first asks the device to free this phone's slot (`08`). A normal phone out of range may still forget, and its slot stays until the admin revokes it. The admin can only forget while connected, and only as the last phone; otherwise it hands over admin first, so the device always has one.
+- Forgetting the device in the app first asks the device to free this phone's slot (`08`). A normal phone out of range may still forget, and its slot stays until the admin revokes it. Connected, the admin can only leave as the last phone; otherwise it hands over admin first, so the device always has one. Out of range (or with a broken device), the admin may still forget after a warning: the device then has no admin until KEY is held for 10 seconds.
 - Holding the second button (KEY / GPIO14) for 10 seconds erases all phone keys and restarts. The setup secret is kept, so the printed QR code stays valid, and pairing opens again for a new admin.
 
 ## Getting started
@@ -159,7 +159,7 @@ Requires [PlatformIO](https://platformio.org/). From `firmware_esp/rolling-door-
 pio run -t upload && pio device monitor
 ```
 
-The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) `power mains|battery [0-100]` (set the fake power status in `INFO` until phase 6 measures it), `buttons` (list the buttons with icon and name) and `rf` (learn and test the remote's codes, see below).
+The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) `battery` (the cell's voltage and percent), `buttons` (list the buttons with icon and name) and `rf` (learn and test the remote's codes, see below).
 
 The admin phone learns the codes from Settings, **Buttons** (see [Android app](#android-app)). Over the serial console, type `rf learn 1` and hold the remote's Up button a few centimetres from the receiver; the code is saved once it is received twice in a row (15 s timeout, `rf cancel` stops early). Repeat for buttons `2`, `3` and `4` (Down, Lock, Unlock on a new board). Codes learned before buttons had ids are moved to buttons 1–4 on the first boot. `rf list` shows which buttons are learned (protocol, bit count and pulse length, never the code), `rf send <button>` transmits a code without the app, and `rf clear [button]` erases one or all codes. `rf verify` sends each learned code and decodes it with the board's own receiver, to check that the board transmits exactly the code of that remote button (it also warns if two buttons were learned with the same code). Two more commands check the hardware: `rf selftest` does the same with a made-up code, and `rf scan` logs the receiver's edge counts for 10 seconds while a remote button is pressed.
 
@@ -212,9 +212,9 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [x] **Phase 1 – BLE skeleton:** GATT server on the ESP32 with a fake RF layer (serial log only)
 - [x] **Phase 2 – Pairing and authentication:** QR code pairing, key table, HMAC check, admin role
 - [x] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
-- [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, power status in the app
+- [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, battery level in the app
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
-- [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, buttons the admin can add, edit and delete (up to eight), fit battery and mains detection
+- [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, buttons the admin can add, edit and delete (up to eight), measure the backup battery
 - [x] **Phase 7 – More phones:** admin UI to add (8-digit invite), rename, revoke and hand over admin; a phone that forgets the device leaves and frees its slot; up to three phones connected at once
 
 ## Security notes

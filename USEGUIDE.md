@@ -38,7 +38,7 @@ rolling-door-ble/
 │       ├── protocol.*, buttons.*, console.*  Mã lệnh, nút BOOT/KEY, lệnh serial
 │       ├── remote_buttons.*                  Danh sách nút điều khiển (id, biểu tượng, tên) trong NVS
 │       ├── rf.h, rf.cpp                      Lớp RF: phát bằng rc-switch, tự giải mã lúc học mã, lưu mã trong NVS
-│       └── power.h, power_fake.cpp           Trạng thái nguồn cho INFO (hiện là bản giả, đặt bằng lệnh serial)
+│       └── power.h, power.cpp                Đo pin LiPo qua GPIO4 cho INFO
 ├── tools/qr-viewer.html                      Đọc mã QR từ board qua Web Serial
 └── docs/                                     Ghi chú kế hoạch ban đầu
 ```
@@ -51,10 +51,10 @@ rolling-door-ble/
 | Bộ MX-433: FS1000A (phát) | Cấp 5V. Phát lại mã của remote. Anten dây 17,3cm |
 | Bộ MX-433: XY-MK-5V / MX-05V (thu) | Cấp 5V. Chỉ dùng khi học mã từ remote. DATA ra mức 5V nên phải qua cầu phân áp 10k/20k trước khi vào GPIO |
 | Adapter 5V USB-C | Nguồn chính |
-| Pin LiPo 3,7V, cổng JST 1,25mm | Nguồn dự phòng, chỉ để báo mất điện |
-| Điện trở 10kΩ và 20kΩ | Cầu phân áp cho DATA mạch thu và cho mạch phát hiện điện lưới |
+| Pin LiPo 3,7V, cổng JST 1,25mm | Nguồn dự phòng: giữ board chạy khi mất điện. Đo qua GPIO4 (cầu phân áp có sẵn trên board) |
+| Điện trở 10kΩ và 20kΩ | Cầu phân áp cho DATA mạch thu |
 
-DATA phát nối GPIO13, DATA thu nối GPIO12 qua cầu phân áp (ghi trong `config.h` và README). Chân phát hiện điện lưới chưa chốt, sẽ chọn sau trong giai đoạn 6. Chân 5V của board chỉ có điện khi cắm USB, nên lúc chạy pin hai mạch RF tắt.
+DATA phát nối GPIO13, DATA thu nối GPIO12 qua cầu phân áp (ghi trong `config.h` và README). Chân 5V của board chỉ có điện khi cắm USB, nên lúc chạy pin hai mạch RF tắt.
 
 ## Build trên Windows
 
@@ -111,7 +111,7 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 | 3 | App Android: ghép đôi, màn hình bốn nút, tự kết nối | Xong |
 | 4 | Hoàn thiện: dưới 1 giây từ lúc mở đến sẵn sàng, xử lý mất kết nối, trạng thái nguồn | Chưa |
 | 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
-| 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, lắp pin và mạch phát hiện điện lưới | Đang làm |
+| 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, đo pin dự phòng | Đang làm |
 | 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Xong |
 
 Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh). Giai đoạn 4 và 6 chưa xong.
@@ -161,13 +161,17 @@ Giai đoạn 6, học mã từ app admin (firmware ở nhánh `esp32`, app ở n
 
 Giai đoạn 6, nút tùy chỉnh (firmware ở nhánh `esp32`, app ở nhánh `android`): board giữ tối đa 8 nút trong NVS (namespace `buttons`), mỗi nút có id 1–8 (cũng là ô mã RF, key `c1`–`c8` trong namespace `rf`; mã học trước đó dưới key `UP`, `DOWN`, `LOCK`, `UNLOCK` tự chuyển sang nút 1–4 lần khởi động đầu), biểu tượng (10 loại, màu theo biểu tượng) và tên UTF-8 tối đa 32 byte. Board mới có sẵn bốn nút mặc định, tên trống, app hiện tên của biểu tượng theo ngôn ngữ máy. Lệnh mới: `0B` bấm nút `[id]` (`01`–`04` vẫn bấm nút 1–4), `0C` thêm hoặc sửa nút `[id][biểu tượng][tên]`, `0D` xóa nút cùng mã của nó; `09`, `0A` nhận id 1–8. Args tăng lên 34 byte, nên app xin MTU lớn trước khi gửi `0C` (chỉ lệnh này vượt MTU mặc định). Characteristic mới `BUTTONS` (`…0007`, chỉ đọc) trả về danh sách; `INFO` thêm byte thứ 4 là số phiên bản danh sách, board notify `INFO` trước `STATUS` của lệnh. App lưu danh sách trong DataStore và chỉ đọc lại khi số phiên bản đổi. Trong app: Cài đặt, Nút điều khiển, danh sách nút và Thêm nút; trang của từng nút gồm tên, biểu tượng, Lưu, Học lệnh (xóa lệnh ở cuối dòng) và Xóa nút (có bước xác nhận). Màn điều khiển xếp 2 nút một hàng, các hàng chia đều chiều cao, nút lẻ cuối chiếm cả hàng. Lệnh serial: `buttons`, `rf learn <1-8>`. Đã build firmware và app, unit test qua, chạy thử trên board được.
 
-Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), mạch phát hiện điện lưới và đo pin.
+Giai đoạn 6, pin: bỏ phát hiện điện lưới (không nối thêm dây), nên app bỏ luôn báo "Mất điện" và làm mờ nút. Board đo pin qua GPIO4 của T-Display-S3 (cầu phân áp 1/2 có sẵn), `analogReadMilliVolts` nhân 2, trung bình 16 mẫu, 5 giây một lần; đổi ra phần trăm theo bảng điện áp LiPo (4,2V = 100%, 3,3V = 0%), chỉ notify `INFO` khi lệch từ 2%. Khi cắm USB, GPIO4 đo phía mạch sạc (đo được khoảng 4,6V) chứ không phải pin, nên trên 4,4V board báo `FE` (đang sạc), dưới 2,5V báo `FF` (không có pin). Byte đầu của `INFO` luôn là `00`. App hiện dòng Pin trong Cài đặt: "Đang sạc" hoặc phần trăm. Lệnh serial `power` (giá trị giả) đổi thành `battery` (in điện áp và phần trăm). Đã thử trên board: cắm USB đọc 4610 mV, báo đang sạc. Rút USB thì app nhận `INFO` `00 ff …`: GPIO4 đọc gần 0V khi chạy pin. Theo ví dụ của LilyGO, chạy pin thì phải bật GPIO15 (`LCD_POWER_ON`) lên mức cao; firmware bật nó chỉ trong lúc đo (khoảng 10 ms) rồi tắt, vì chân này cũng cấp nguồn cho màn hình. Chưa thử lại bản này lúc chạy pin.
+
+Giai đoạn 6, nhắc học lệnh: board mới chưa có mã nào nên các nút mờ mà không nói lý do. Màn điều khiển giờ ghi dưới dòng trạng thái: chưa học nút nào thì "Chưa học lệnh từ remote nên các nút chưa dùng được." (máy thường thêm "Nhờ quản trị viên học lệnh."), học một phần thì "Nút mờ là nút chưa học lệnh."; máy quản trị viên có link Học lệnh mở thẳng trang Nút điều khiển. Đã thử trên tablet.
+
+Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), kiểm tra phần trăm pin lúc chạy pin.
 
 Giai đoạn 7, xong (firmware ở nhánh `esp32`, app ở nhánh `android`):
 
 - Lệnh mới: `08` Rời board (máy nào cũng gửi được, board xóa ô của chính máy gửi, không nhận key id), `0E` Xem danh sách máy (máy nào cũng gửi được), `0F` Đổi tên máy `[key id][tên 0–32 byte]` (admin đổi mọi máy, máy thường chỉ đổi tên chính nó), `10` Chuyển quyền admin `[key id]` (admin cũ thành máy thường). Characteristic mới `PHONES` (`…0008`, chỉ đọc): rỗng cho tới khi kết nối đó gửi `0E`; kết nối khác đọc ra rỗng.
 - Tên máy lưu trong NVS cùng namespace `keys`, key `n0`–`n7`, không đổi blob `Slot` nên các máy đã ghép đôi giữ nguyên khóa. Ghép đôi xong, app gửi `0F` đặt tên theo tên thiết bị trong Cài đặt Android. Máy chưa có tên thì app hiện "Điện thoại <số ô + 1>".
-- Admin rời đi khi còn máy khác thì board trả `04`, app báo phải đặt máy khác làm quản trị viên trước. Admin là máy cuối thì rời được, board mở lại ghép đôi. Không kết nối được board lúc quên: máy thường được quên (ô còn trên board cho tới khi admin thu hồi), admin bị chặn.
+- Admin rời đi khi còn máy khác thì board trả `04`, app báo phải đặt máy khác làm quản trị viên trước. Admin là máy cuối thì rời được, board mở lại ghép đôi. Không kết nối được board lúc quên: máy nào cũng được "Vẫn quên" (ô còn trên board cho tới khi admin thu hồi). Admin thì có cảnh báo: board sẽ không còn quản trị viên, muốn có lại phải giữ KEY 10 giây. Lúc đầu admin bị chặn hẳn, nhưng board hỏng thì admin kẹt mãi, không quên được để ghép đôi board mới.
 - `0E` cho mọi máy chứ không chỉ admin, vì máy được chuyển quyền cần biết vai trò mới: app đọc danh sách mỗi lần mở Cài đặt và cập nhật vai trò lưu trong DataStore.
 - Nhiều kết nối cùng lúc (tối đa 3, `config::kMaxConnections`): trước đây board chỉ nhận một kết nối và ngừng quảng bá, nên một người mở app thì người khác thấy "Ngoài vùng". Giờ board quảng bá lại trong `onConnect` khi còn chỗ. Mỗi kết nối có nonce CHALLENGE riêng (đọc qua `onRead`, notify riêng cho kết nối đó), nhận `STATUS` của lệnh do chính nó gửi, và đọc `PAIRING`, `PHONES` của riêng nó; `INFO` notify cho tất cả. Đọc dài (`PAIRING`, `PHONES`) chỉ gọi `onRead` ở lượt đầu, nên hai máy đọc cùng lúc có thể lẫn giá trị; hiếm, và app kiểm tra rồi đọc lại. Chỉ giữ một ô chờ xác nhận lúc ghép đôi: hai máy ghép đôi cùng lúc thì máy trước bị bỏ.
 - Mã mời thay cho việc lấy mã QR qua máy tính: lệnh `11` (admin), board tạo 8 số ngẫu nhiên dùng một lần trong 5 phút (mã mới thay mã cũ, dùng xong hay ghép đôi xong thì hủy). Khóa ghép đôi là `HMAC-SHA256(key = 8 số dạng ASCII, "RDINVITE")` lấy 16 byte đầu, thay cho setup secret, phần còn lại của ghép đôi giữ nguyên. Admin đọc `PAIRING` ngay sau lệnh: `[02][salt 16][8 số XOR HMAC(khóa admin, "RDINVITE" ‖ salt)]`, nên 8 số không đi qua sóng ở dạng rõ. Máy admin hiện mã QR (dạng `RDOOR1:<MAC>:<khóa>`, vẽ bằng ZXing core) và 8 số; máy mới quét hoặc chọn Nhập mã rồi gõ 8 số. Gõ số thì app không có MAC, nên tìm board đang quảng bá cờ ghép đôi. Đóng trang mã thì app đọc lại danh sách, nên thấy ngay máy vừa ghép đôi. Mã QR gốc của board vẫn dùng được (máy đầu tiên, giữ BOOT 3 giây).

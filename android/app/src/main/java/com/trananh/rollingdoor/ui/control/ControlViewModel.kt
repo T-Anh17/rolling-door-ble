@@ -105,8 +105,8 @@ data class InviteState(
 enum class LeaveState {
     Leaving,
     MustHandOver, // the admin, with other phones paired: make one of them admin first
-    Offline,      // the board cannot be reached; a normal phone may still forget
-    OfflineAdmin, // the same for the admin, which may not: the board would be left without one
+    Offline,      // the board cannot be reached; this phone may still forget
+    OfflineAdmin, // the same for the admin, warned that the board is then left without one
     Failed,
 }
 
@@ -412,7 +412,8 @@ class ControlViewModel(
         }
     }
 
-    // Only after LeaveState.Offline: the slot stays on the board until the admin revokes it.
+    // Only after Offline or OfflineAdmin, for a board that is out of reach or broken: the slot
+    // stays on the board until the admin revokes it, or KEY is held 10 s for a new admin.
     fun forgetAnyway() {
         viewModelScope.launch { repository.forget() }
     }
