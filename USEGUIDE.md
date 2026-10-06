@@ -147,7 +147,10 @@ Giai đoạn 4, board tự xin MTU 255 ngay trong `onConnect`: chạy song song 
 
 Việc còn lại, làm cuối giai đoạn 4:
 
-- Discover vẫn khoảng 0,58 giây, phần lớn là chờ Android đổi chu kỳ. Muốn bỏ hẳn bước này thì phải bond, vì Android chỉ cache GATT cho thiết bị đã bond (đang soạn thiết kế).
+- Discover vẫn khoảng 0,58 giây, phần lớn là chờ Android đổi chu kỳ. Muốn bỏ hẳn bước này thì phải bond, vì Android chỉ cache GATT cho thiết bị đã bond. Để sau. Thiết kế dự kiến:
+  - Bond Just Works chỉ để Android cache GATT; bảo mật vẫn là HMAC, không characteristic nào đòi mã hóa. Board chỉ giữ bond của máy đã gửi lệnh HMAC hợp lệ trên kết nối đó (bond lạ thì xóa và ngắt), tối đa 8 bond (`CONFIG_BT_NIMBLE_MAX_BONDS`), lưu địa chỉ của máy theo ô khóa để thu hồi (`07`) và giữ KEY 10 giây xóa luôn bond. App bond sau Ping xác nhận lúc ghép đôi; máy cũ bond qua một dòng trong Cài đặt; thiếu characteristic sau discover thì `refresh()` rồi discover lại.
+  - Rủi ro: Android có thể tự mã hóa link mỗi lần kết nối lại (thêm khoảng 150–200 ms lúc chu kỳ còn 48,75 ms); bond lệch (board mất bond, máy còn) làm kết nối rớt liên tục, mà app không tự xóa bond được từ Android 13, người dùng phải bỏ ghép đôi trong Cài đặt Bluetooth; hộp thoại ghép đôi của hệ thống hiện địa chỉ MAC vì board không quảng bá tên.
+  - Bước đầu, chưa commit: bật bond trên board, app debug gọi `createBond()` một lần, đo 8 lần (discover, có mã hóa không), thử xóa bond trên board xem máy có kết nối lại được không. Chỉ làm tiếp nếu setup giảm từ 300 ms trở lên và bond lệch phục hồi được.
 - Kết nối dao động 0,13–0,79 giây không phải do chu kỳ quảng bá: board đã quảng bá 20–30 ms (nhánh `esp32`, commit `a82a387`) mà số đo không đổi. Cần xem thông số kết nối phía Android (HCI snoop log).
 
 Giai đoạn 6, đã làm (nhánh `esp32`): thay lớp RF giả bằng `rc-switch`, phát lặp 10 lần mỗi lệnh. Học mã qua lệnh serial `rf learn <nút>`: mạch thu chỉ bật lúc học, giải mã được cùng một mã hai lần liên tiếp mới lưu vào NVS (namespace `rf`), log không in giá trị mã. Nút chưa có mã thì lệnh trả `03`. `rf verify` phát từng mã đã học rồi cho mạch thu của board tự giải lại, so với mã đã lưu, để chắc mạch phát phát đúng mã của nút đã bấm trên remote (cũng cảnh báo nếu hai nút trùng mã). Lệnh kiểm tra phần cứng: `rf selftest` (như trên nhưng với mã giả) và `rf scan` (đếm xung trên chân thu).
