@@ -28,7 +28,7 @@ uint8_t pressedButton(const CommandFrame& frame) {
 bool isAdminCommand(uint8_t command) {
   return (command >= cmd::kUpdateMode && command <= cmd::kRevokePhone) ||
          command == cmd::kLearnRf || command == cmd::kClearRf || command == cmd::kSetButton ||
-         command == cmd::kDeleteButton;
+         command == cmd::kDeleteButton || command == cmd::kMakeAdmin || command == cmd::kInvite;
 }
 
 const char* commandName(uint8_t command) {
@@ -41,11 +41,16 @@ const char* commandName(uint8_t command) {
     case cmd::kUpdateMode:  return "UPDATE_MODE";
     case cmd::kOpenPairing: return "OPEN_PAIRING";
     case cmd::kRevokePhone: return "REVOKE_PHONE";
+    case cmd::kLeave:       return "LEAVE";
     case cmd::kLearnRf:     return "LEARN_RF";
     case cmd::kClearRf:     return "CLEAR_RF";
     case cmd::kPress:       return "PRESS";
     case cmd::kSetButton:   return "SET_BUTTON";
     case cmd::kDeleteButton: return "DELETE_BUTTON";
+    case cmd::kListPhones:  return "LIST_PHONES";
+    case cmd::kRenamePhone: return "RENAME_PHONE";
+    case cmd::kMakeAdmin:   return "MAKE_ADMIN";
+    case cmd::kInvite:      return "INVITE";
     default:                return "UNKNOWN";
   }
 }

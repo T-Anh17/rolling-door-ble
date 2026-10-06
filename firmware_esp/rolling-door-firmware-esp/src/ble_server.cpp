@@ -6,6 +6,10 @@
 #include <string.h>
 
 #include "config.h"
+#include "key_store.h"
+
+static_assert(config::kMaxConnections <= CONFIG_BT_NIMBLE_MAX_CONNECTIONS,
+              "NimBLE must allow as many connections as the board takes");
 
 namespace ble {
 namespace {
@@ -17,7 +21,57 @@ NimBLECharacteristic* statusChar = nullptr;
 NimBLECharacteristic* infoChar = nullptr;
 NimBLECharacteristic* pairingChar = nullptr;
 NimBLECharacteristic* buttonsChar = nullptr;
-uint8_t currentNonce[config::kNonceLength];
+NimBLECharacteristic* phonesChar = nullptr;
+
+// One per connection. Taken in the NimBLE task (connect, reads) and changed in loop(), so
+// every access holds peersLock.
+struct Peer {
+  uint16_t handle;  // BLE_HS_CONN_HANDLE_NONE when free
+  uint8_t nonce[config::kNonceLength];
+  uint8_t pairing[config::kPairingResponseLength];
+  size_t pairingLength;
+  uint8_t phones[key_store::kSerializedMax];
+  size_t phonesLength;
+};
+
+Peer peers[config::kMaxConnections];
+portMUX_TYPE peersLock = portMUX_INITIALIZER_UNLOCKED;
+
+// Call with peersLock held.
+Peer* findPeer(uint16_t handle) {
+  for (Peer& peer : peers) {
+    if (peer.handle == handle && handle != BLE_HS_CONN_HANDLE_NONE) {
+      return &peer;
+    }
+  }
+  return nullptr;
+}
+
+void addPeer(uint16_t handle) {
+  uint8_t nonce[config::kNonceLength];
+  esp_fill_random(nonce, sizeof(nonce));
+  portENTER_CRITICAL(&peersLock);
+  for (Peer& peer : peers) {
+    if (peer.handle == BLE_HS_CONN_HANDLE_NONE) {
+      peer.handle = handle;
+      memcpy(peer.nonce, nonce, sizeof(nonce));
+      peer.pairingLength = 0;
+      peer.phonesLength = 0;
+      break;
+    }
+  }
+  portEXIT_CRITICAL(&peersLock);
+}
+
+void removePeer(uint16_t handle) {
+  portENTER_CRITICAL(&peersLock);
+  Peer* peer = findPeer(handle);
+  if (peer != nullptr) {
+    memset(peer, 0, sizeof(Peer));
+    peer->handle = BLE_HS_CONN_HANDLE_NONE;
+  }
+  portEXIT_CRITICAL(&peersLock);
+}
 
 void post(Event::Type type, uint16_t connHandle, const uint8_t* data = nullptr, size_t length = 0) {
   Event event = {};
@@ -39,13 +93,21 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   // The board asks for a large MTU itself, right away: it runs alongside the phone's service
   // discovery instead of before it, and discovery then needs fewer requests (one characteristic
   // with a 128-bit UUID per response at the default MTU).
-  void onConnect(NimBLEServer*, NimBLEConnInfo& connInfo) override {
+  //
+  // Advertising stops when a phone connects; it starts again while there is room for another.
+  void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
     const int rc = ble_gattc_exchange_mtu(connInfo.getConnHandle(), nullptr, nullptr);
     if (rc != 0) {
       Serial.printf("[BLE] MTU exchange not started, rc %d\n", rc);
     }
-    Serial.printf("[BLE] connected %s, interval %.2fms\n", connInfo.getAddress().toString().c_str(),
-                  connInfo.getConnInterval() * 1.25f);
+    addPeer(connInfo.getConnHandle());
+    const uint8_t connected = server->getConnectedCount();
+    if (connected < config::kMaxConnections) {
+      NimBLEDevice::startAdvertising();
+    }
+    Serial.printf("[BLE] connected %s, interval %.2fms, %u/%u connection(s)\n",
+                  connInfo.getAddress().toString().c_str(), connInfo.getConnInterval() * 1.25f,
+                  connected, static_cast<unsigned>(config::kMaxConnections));
     post(Event::Type::Connected, connInfo.getConnHandle());
   }
 
@@ -56,6 +118,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {
     Serial.printf("[BLE] disconnected %s, reason 0x%X, advertising again\n",
                   connInfo.getAddress().toString().c_str(), reason);
+    removePeer(connInfo.getConnHandle());
     post(Event::Type::Disconnected, connInfo.getConnHandle());
   }
 
@@ -80,14 +143,54 @@ class CommandCallbacks : public NimBLECharacteristicCallbacks {
   }
 };
 
-class PairingCallbacks : public NimBLECharacteristicCallbacks {
+// Values that differ per connection: the value is set to the reader's own just before NimBLE
+// answers. A long read's follow-up requests get no callback and use the value as it is then;
+// only PAIRING and PHONES are long, and two phones reading them at the same moment is rare (a
+// mixed read fails the app's checks and is read again).
+class PerPeerReadCallbacks : public NimBLECharacteristicCallbacks {
+ public:
+  enum class Kind { Challenge, Pairing, Phones };
+  explicit PerPeerReadCallbacks(Kind kind) : kind(kind) {}
+
+  void onRead(NimBLECharacteristic* characteristic, NimBLEConnInfo& connInfo) override {
+    uint8_t value[key_store::kSerializedMax];
+    size_t length = 0;
+    portENTER_CRITICAL(&peersLock);
+    const Peer* peer = findPeer(connInfo.getConnHandle());
+    if (peer != nullptr) {
+      switch (kind) {
+        case Kind::Challenge:
+          length = sizeof(peer->nonce);
+          memcpy(value, peer->nonce, length);
+          break;
+        case Kind::Pairing:
+          length = peer->pairingLength;
+          memcpy(value, peer->pairing, length);
+          break;
+        case Kind::Phones:
+          length = peer->phonesLength;
+          memcpy(value, peer->phones, length);
+          break;
+      }
+    }
+    portEXIT_CRITICAL(&peersLock);
+    characteristic->setValue(value, length);
+  }
+
+  // PAIRING is also written; the request goes to loop() like a command.
   void onWrite(NimBLECharacteristic* characteristic, NimBLEConnInfo& connInfo) override {
+    if (kind != Kind::Pairing) {
+      return;
+    }
     const NimBLEAttValue& value = characteristic->getValue();
     const size_t length = value.size() > config::kPairingRequestLength
                               ? 0  // too long: forward an empty request, rejected as BadCommand
                               : value.size();
     post(Event::Type::PairingRequest, connInfo.getConnHandle(), value.data(), length);
   }
+
+ private:
+  Kind kind;
 };
 
 void applyScanResponse(bool pairingOpen) {
@@ -107,10 +210,27 @@ void applyScanResponse(bool pairingOpen) {
   }
 }
 
+// Copies data into this connection's slot for PAIRING or PHONES.
+void setPeerValue(uint16_t connHandle, bool pairing, const uint8_t* data, size_t length) {
+  portENTER_CRITICAL(&peersLock);
+  Peer* peer = findPeer(connHandle);
+  if (peer != nullptr) {
+    uint8_t* target = pairing ? peer->pairing : peer->phones;
+    const size_t capacity = pairing ? sizeof(peer->pairing) : sizeof(peer->phones);
+    const size_t copied = length > capacity ? capacity : length;
+    memcpy(target, data, copied);
+    (pairing ? peer->pairingLength : peer->phonesLength) = copied;
+  }
+  portEXIT_CRITICAL(&peersLock);
+}
+
 }  // namespace
 
 void begin() {
   eventQueue = xQueueCreate(config::kEventQueueDepth, sizeof(Event));
+  for (Peer& peer : peers) {
+    peer.handle = BLE_HS_CONN_HANDLE_NONE;
+  }
 
   // No device name, in advertising or in the GAP Device Name characteristic,
   // so a scan does not reveal what the board controls.
@@ -122,8 +242,10 @@ void begin() {
 
   NimBLEService* service = server->createService(config::kServiceUuid);
 
+  // Each connection reads and is notified its own nonce.
   challengeChar = service->createCharacteristic(
       config::kChallengeUuid, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  challengeChar->setCallbacks(new PerPeerReadCallbacks(PerPeerReadCallbacks::Kind::Challenge));
 
   NimBLECharacteristic* commandChar =
       service->createCharacteristic(config::kCommandUuid, NIMBLE_PROPERTY::WRITE);
@@ -143,11 +265,14 @@ void begin() {
   // changes. main.cpp sets it with setButtons().
   buttonsChar = service->createCharacteristic(config::kButtonsUuid, NIMBLE_PROPERTY::READ);
 
+  // The phone list: empty until this connection sends LIST_PHONES.
+  phonesChar = service->createCharacteristic(config::kPhonesUuid, NIMBLE_PROPERTY::READ);
+  phonesChar->setCallbacks(new PerPeerReadCallbacks(PerPeerReadCallbacks::Kind::Phones));
+
   pairingChar = service->createCharacteristic(config::kPairingUuid,
                                               NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
-  pairingChar->setCallbacks(new PairingCallbacks());
+  pairingChar->setCallbacks(new PerPeerReadCallbacks(PerPeerReadCallbacks::Kind::Pairing));
 
-  rotateChallenge();
   server->start();
 
   // Service UUID goes in the advertising packet so the app can scan by it;
@@ -167,20 +292,32 @@ bool nextEvent(Event& out) {
   return xQueueReceive(eventQueue, &out, 0) == pdTRUE;
 }
 
-const uint8_t* nonce() {
-  return currentNonce;
+// Only loop() changes a nonce, so the pointer stays valid until loop() rotates it or the
+// connection goes.
+const uint8_t* nonce(uint16_t connHandle) {
+  portENTER_CRITICAL(&peersLock);
+  const Peer* peer = findPeer(connHandle);
+  portEXIT_CRITICAL(&peersLock);
+  return peer != nullptr ? peer->nonce : nullptr;
 }
 
-void rotateChallenge() {
-  esp_fill_random(currentNonce, sizeof(currentNonce));
-  challengeChar->setValue(currentNonce, sizeof(currentNonce));
-  challengeChar->notify();
+void rotateChallenge(uint16_t connHandle) {
+  uint8_t nonce[config::kNonceLength];
+  esp_fill_random(nonce, sizeof(nonce));
+  portENTER_CRITICAL(&peersLock);
+  Peer* peer = findPeer(connHandle);
+  if (peer != nullptr) {
+    memcpy(peer->nonce, nonce, sizeof(nonce));
+  }
+  portEXIT_CRITICAL(&peersLock);
+  if (peer != nullptr) {
+    challengeChar->notify(nonce, sizeof(nonce), connHandle);
+  }
 }
 
-void notifyStatus(uint8_t command, Result result) {
+void notifyStatus(uint16_t connHandle, uint8_t command, Result result) {
   const uint8_t status[] = {command, static_cast<uint8_t>(result)};
-  statusChar->setValue(status, sizeof(status));
-  statusChar->notify();
+  statusChar->notify(status, sizeof(status), connHandle);
 }
 
 void setInfo(uint8_t powerSource, uint8_t batteryPercent, uint8_t learnedMask, uint8_t revision) {
@@ -193,13 +330,12 @@ void setButtons(const uint8_t* data, size_t length) {
   buttonsChar->setValue(data, length);
 }
 
-void setPairingResponse(const uint8_t* data, size_t length) {
-  pairingChar->setValue(data, length);
+void setPhones(uint16_t connHandle, const uint8_t* data, size_t length) {
+  setPeerValue(connHandle, false, data, length);
 }
 
-void clearPairingResponse() {
-  const uint8_t empty[1] = {0};
-  pairingChar->setValue(empty, 0);
+void setPairingResponse(uint16_t connHandle, const uint8_t* data, size_t length) {
+  setPeerValue(connHandle, true, data, length);
 }
 
 void setPairingAdvertised(bool open) {

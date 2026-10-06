@@ -13,6 +13,7 @@ constexpr const char* kStatusUuid    = "a7930004-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kInfoUuid      = "a7930005-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kPairingUuid   = "a7930006-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kButtonsUuid   = "a7930007-966e-4240-b881-5c2e2f2203a8";
+constexpr const char* kPhonesUuid    = "a7930008-966e-4240-b881-5c2e2f2203a8";
 
 // Advertising interval in units of 0.625ms: 32 = 20ms, 48 = 30ms. Short, so a phone that
 // connects directly finds the board within one or two of its scan windows. Costs more power,
@@ -22,8 +23,8 @@ constexpr uint16_t kAdvMaxInterval = 48;
 // Scan response manufacturer data while pairing is open: [company id 0xFFFF][0x01].
 constexpr uint16_t kManufacturerId = 0xFFFF;
 
-// COMMAND: [key id][command][args 0-34][truncated HMAC 16]. Frames over 20 bytes (only
-// SET_BUTTON) need a larger MTU, which the app asks for before sending one.
+// COMMAND: [key id][command][args 0-34][truncated HMAC 16]. Frames over 20 bytes (SET_BUTTON,
+// RENAME_PHONE) need a larger MTU: the board asks for one on connect, the app before sending one.
 constexpr size_t kNonceLength = 16;
 constexpr size_t kMacLength = 16;
 constexpr size_t kMaxArgsLength = 34;
@@ -34,6 +35,7 @@ constexpr size_t kMaxFrameLength = kMinFrameLength + kMaxArgsLength;
 constexpr size_t kSecretLength = 16;     // device setup secret, shown as a QR code
 constexpr size_t kKeyLength = 32;        // per-phone key
 constexpr size_t kSlotCount = 8;
+constexpr size_t kPhoneNameLength = 32;  // UTF-8 bytes
 constexpr size_t kPublicKeyLength = 65;  // uncompressed P-256 point
 constexpr size_t kIvLength = 12;
 constexpr size_t kGcmTagLength = 16;
@@ -45,6 +47,11 @@ constexpr size_t kPairingResponseLength =
     1 + kPublicKeyLength + kIvLength + kPairingPlainLength + kGcmTagLength;
 
 constexpr uint32_t kPairingWindowMs = 60 * 1000;
+// Invite from the admin phone: 8 digits, typed or scanned on the new phone, standing in for
+// the QR code's secret. PAIRING read after INVITE: [0x02][salt 16][digits XOR mask 8].
+constexpr uint32_t kInviteMs = 5 * 60 * 1000;
+constexpr size_t kInviteDigits = 8;
+constexpr size_t kInviteResponseLength = 1 + kNonceLength + kInviteDigits;
 constexpr uint8_t kMaxAuthFailures = 5;
 constexpr uint32_t kLockoutMs = 60 * 1000;
 
@@ -64,6 +71,9 @@ constexpr uint32_t kRfLearnTimeoutMs = 15 * 1000;
 // Remote buttons the admin sets up: id 1-8, each with an icon, a name and one RF code.
 constexpr uint8_t kMaxButtons = 8;
 constexpr size_t kButtonNameLength = 32;  // UTF-8 bytes
+
+// Phones connected at once; the board keeps advertising while it has room for another.
+constexpr uint8_t kMaxConnections = 3;
 
 constexpr size_t kEventQueueDepth = 6;
 

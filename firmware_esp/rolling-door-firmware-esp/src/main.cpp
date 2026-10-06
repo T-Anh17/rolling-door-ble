@@ -55,7 +55,7 @@ void reportLearning(rf::LearnOutcome outcome) {
   phoneLearning.active = false;
   const Result result = outcome == rf::LearnOutcome::Learned ? Result::Ok : Result::RfError;
   Serial.printf("[CMD] learning result 0x%02X\n", static_cast<uint8_t>(result));
-  ble::notifyStatus(cmd::kRfLearned, result);
+  ble::notifyStatus(phoneLearning.connHandle, cmd::kRfLearned, result);
 }
 
 // LEARN_RF args: [00] cancels, [01-08] learns that button. Ok means the receiver is listening.
@@ -102,6 +102,43 @@ Result deleteButton(const CommandFrame& frame) {
   return Result::Ok;
 }
 
+// LEAVE: the sender gives up its own slot. An admin may only leave as the last phone, so the
+// board is never left without one; with other phones it hands over admin first (MAKE_ADMIN).
+// With no phone left, pairing opens again for a new admin.
+Result leave(const CommandFrame& frame, const key_store::Slot& slot) {
+  if (frame.argsLength != 0) {
+    return Result::BadCommand;
+  }
+  if (slot.role == static_cast<uint8_t>(Role::Admin) && key_store::count() > 1) {
+    return Result::NotPermitted;
+  }
+  return key_store::revoke(frame.keyId) ? Result::Ok : Result::BadCommand;
+}
+
+// LIST_PHONES: fills PHONES for this connection only. Any phone may ask: a phone made admin by
+// another one learns its new role from the list.
+Result listPhones(const CommandFrame& frame, uint16_t connHandle) {
+  if (frame.argsLength != 0) {
+    return Result::BadCommand;
+  }
+  uint8_t phones[key_store::kSerializedMax];
+  ble::setPhones(connHandle, phones, key_store::serialize(phones, sizeof(phones)));
+  return Result::Ok;
+}
+
+// RENAME_PHONE args: [key id][name UTF-8 0-32]. The admin renames any phone, others only
+// themselves (the app names a new phone after the device right after pairing).
+Result renamePhone(const CommandFrame& frame, const key_store::Slot& slot) {
+  if (frame.argsLength < 1) {
+    return Result::BadCommand;
+  }
+  if (slot.role != static_cast<uint8_t>(Role::Admin) && frame.args[0] != frame.keyId) {
+    return Result::NotPermitted;
+  }
+  const bool ok = key_store::rename(frame.args[0], frame.args + 1, frame.argsLength - 1);
+  return ok ? Result::Ok : Result::BadCommand;
+}
+
 void wipeAndRestart() {
   key_store::wipe();
   Serial.println("[MAIN] restarting");
@@ -127,11 +164,24 @@ Result execute(const CommandFrame& frame, const key_store::Slot& slot, uint16_t 
     case cmd::kOpenPairing:
       pairing::open("admin command");
       return Result::Ok;
+    case cmd::kInvite: {
+      if (frame.argsLength != 0) {
+        return Result::BadCommand;
+      }
+      uint8_t response[config::kInviteResponseLength];
+      size_t responseLength = 0;
+      pairing::createInvite(slot.key, response, responseLength);
+      ble::setPairingResponse(connHandle, response, responseLength);
+      memset(response, 0, sizeof(response));
+      return Result::Ok;
+    }
     case cmd::kRevokePhone:
       if (frame.argsLength != 1 || frame.args[0] == frame.keyId) {
         return Result::BadCommand;  // admins cannot revoke themselves
       }
       return key_store::revoke(frame.args[0]) ? Result::Ok : Result::BadCommand;
+    case cmd::kLeave:
+      return leave(frame, slot);
     case cmd::kLearnRf:
       return learnRf(frame, connHandle);
     case cmd::kClearRf:
@@ -147,6 +197,16 @@ Result execute(const CommandFrame& frame, const key_store::Slot& slot, uint16_t 
       return setButton(frame);
     case cmd::kDeleteButton:
       return deleteButton(frame);
+    case cmd::kListPhones:
+      return listPhones(frame, connHandle);
+    case cmd::kRenamePhone:
+      return renamePhone(frame, slot);
+    case cmd::kMakeAdmin:
+      if (frame.argsLength != 1) {
+        return Result::BadCommand;
+      }
+      return key_store::transferAdmin(frame.keyId, frame.args[0]) ? Result::Ok
+                                                                    : Result::BadCommand;
     case cmd::kUpdateMode:  // phase 5
     default:
       return Result::BadCommand;
@@ -162,7 +222,8 @@ Result handleCommand(const CommandFrame& frame, uint16_t connHandle) {
   }
   bool pending = false;
   const key_store::Slot* slot = key_store::find(frame.keyId, connHandle, &pending);
-  if (slot == nullptr || !auth::verifyFrame(slot->key, ble::nonce(), frame)) {
+  const uint8_t* nonce = ble::nonce(connHandle);
+  if (slot == nullptr || nonce == nullptr || !auth::verifyFrame(slot->key, nonce, frame)) {
     Serial.println(slot == nullptr ? "[AUTH] unknown key" : "[AUTH] bad HMAC");
     if (auth::recordFailure()) {
       ble::disconnect(connHandle);
@@ -181,12 +242,11 @@ Result handleCommand(const CommandFrame& frame, uint16_t connHandle) {
 void handleEvent(const ble::Event& event) {
   switch (event.type) {
     case ble::Event::Type::Connected:
-      ble::rotateChallenge();
+      ble::rotateChallenge(event.connHandle);
       break;
 
     case ble::Event::Type::Disconnected:
       key_store::dropPending(event.connHandle);
-      ble::clearPairingResponse();
       // Nobody is left to hold the remote near the board.
       if (phoneLearning.active && phoneLearning.connHandle == event.connHandle) {
         phoneLearning.active = false;
@@ -195,7 +255,7 @@ void handleEvent(const ble::Event& event) {
       break;
 
     case ble::Event::Type::BadCommand:
-      ble::notifyStatus(0x00, Result::BadCommand);
+      ble::notifyStatus(event.connHandle, 0x00, Result::BadCommand);
       break;
 
     case ble::Event::Type::Command: {
@@ -205,20 +265,24 @@ void handleEvent(const ble::Event& event) {
       Serial.printf("[CMD] result 0x%02X\n", static_cast<uint8_t>(result));
       // INFO first: the phone already sees a changed button list when STATUS arrives.
       updateInfo();
-      ble::notifyStatus(frame.command, result);
-      ble::rotateChallenge();
+      ble::notifyStatus(event.connHandle, frame.command, result);
+      ble::rotateChallenge(event.connHandle);
       break;
     }
 
     case ble::Event::Type::PairingRequest: {
+      const uint8_t* nonce = ble::nonce(event.connHandle);
+      if (nonce == nullptr) {
+        break;  // the phone is already gone
+      }
       uint8_t response[config::kPairingResponseLength];
       size_t responseLength = 0;
-      const Result result = pairing::handleRequest(event.data, event.length, ble::nonce(),
+      const Result result = pairing::handleRequest(event.data, event.length, nonce,
                                                    event.connHandle, response, responseLength);
       Serial.printf("[PAIR] result 0x%02X\n", static_cast<uint8_t>(result));
-      ble::setPairingResponse(response, responseLength);
-      ble::notifyStatus(cmd::kPairing, result);
-      ble::rotateChallenge();
+      ble::setPairingResponse(event.connHandle, response, responseLength);
+      ble::notifyStatus(event.connHandle, cmd::kPairing, result);
+      ble::rotateChallenge(event.connHandle);
       if (result == Result::AuthFailed && auth::isLockedOut()) {
         ble::disconnect(event.connHandle);
       }
