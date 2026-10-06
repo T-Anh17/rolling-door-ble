@@ -25,6 +25,7 @@ rolling-door-ble/
 │       ├── crypto/                           HKDF, ghép đôi ECDH, ký lệnh, Android Keystore
 │       ├── data/                             DeviceRepository (DataStore + PhoneKeyStore)
 │       ├── protocol/                         UUID, khung lệnh, phân tích mã QR
+│       ├── tile/                             Ô Quick Settings: chạm vào là mở app
 │       └── ui/                               Theme, components, gate quyền Bluetooth, ghép đôi, điều khiển
 │   └── app/src/brand/                        Icon và logo splash riêng (không có trong repo)
 ├── firmware_esp/rolling-door-firmware-esp/   Firmware ESP32-S3 (PlatformIO, Arduino)

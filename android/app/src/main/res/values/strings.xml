@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Rolling Door</string>
+    <string name="app_name">Rolling Door Control</string>
 
     <!-- Bluetooth gate -->
     <string name="gate_permission_title">Allow nearby devices</string>
@@ -64,7 +64,7 @@
     <string name="scanner_torch">Flashlight</string>
 
     <!-- Control -->
-    <string name="control_title">Rolling door</string>
+    <string name="control_title">Rolling door control</string>
     <string name="control_up">Up</string>
     <string name="control_down">Down</string>
     <string name="control_lock">Lock</string>
@@ -100,4 +100,8 @@
     <string name="settings_forget_title">Forget device?</string>
     <string name="settings_forget_body">This phone will not control the door until it pairs again with the QR code.</string>
     <string name="settings_cancel">Cancel</string>
+    <string name="settings_quick_tile">Add to Quick Settings</string>
+    <string name="settings_quick_tile_added">Added</string>
+    <string name="settings_quick_tile_footer">Tap the Rolling door control tile in Quick Settings to open the app. The tile does not send commands.</string>
+    <string name="tile_label">Rolling door control</string>
 </resources>

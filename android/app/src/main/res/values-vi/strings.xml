@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Cửa cuốn</string>
+    <string name="app_name">Điều khiển cửa cuốn</string>
 
     <!-- Bluetooth gate -->
     <string name="gate_permission_title">Cho phép thiết bị ở gần</string>
@@ -64,7 +64,7 @@
     <string name="scanner_torch">Đèn pin</string>
 
     <!-- Control -->
-    <string name="control_title">Cửa cuốn</string>
+    <string name="control_title">Điều khiển cửa cuốn</string>
     <string name="control_up">Lên</string>
     <string name="control_down">Xuống</string>
     <string name="control_lock">Khóa</string>
@@ -100,4 +100,8 @@
     <string name="settings_forget_title">Quên thiết bị?</string>
     <string name="settings_forget_body">Máy này sẽ không điều khiển được cửa cho đến khi ghép đôi lại bằng mã QR.</string>
     <string name="settings_cancel">Hủy</string>
+    <string name="settings_quick_tile">Thêm vào bảng thao tác nhanh</string>
+    <string name="settings_quick_tile_added">Đã thêm</string>
+    <string name="settings_quick_tile_footer">Chạm ô Điều khiển cửa cuốn trong bảng thao tác nhanh để mở app. Ô này không gửi lệnh.</string>
+    <string name="tile_label">Điều khiển cửa cuốn</string>
 </resources>
