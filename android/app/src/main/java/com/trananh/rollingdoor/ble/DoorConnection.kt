@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
+import android.os.Process
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -75,6 +76,7 @@ class DoorConnection(
     // Timing logs for the launch-to-ready target, debug builds only.
     private val logTiming = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
     private var startedAt = 0L // first attempt after start() measures from here
+    private var startedAfterProcess = 0L // start() time since the process was created
 
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -92,6 +94,7 @@ class DoorConnection(
         if (started) return
         started = true
         startedAt = SystemClock.elapsedRealtime()
+        startedAfterProcess = startedAt - Process.getStartElapsedRealtime()
         // Registered in code and only while started: nothing wakes the app when it is closed.
         ContextCompat.registerReceiver(
             context,
@@ -206,10 +209,12 @@ class DoorConnection(
     }
 
     // Filter logcat by tag DoorTiming. "since start" counts from start(), so it includes the
-    // time from onStart to the first connect() call; later reconnects count from their attempt.
+    // time from start() to the first connect() call; later reconnects count from their attempt.
+    // "process" is when start() ran after the process was created, which only means something
+    // on a cold launch.
     private fun logReady(opened: DoorLink, attemptAt: Long, waited: Boolean) {
         val now = SystemClock.elapsedRealtime()
-        val since = if (startedAt != 0L) "since start" else "since attempt"
+        val since = if (startedAt != 0L) "since start (process +$startedAfterProcess ms)" else "since attempt"
         val from = if (startedAt != 0L) startedAt else attemptAt
         startedAt = 0L
         Log.d(

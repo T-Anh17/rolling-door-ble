@@ -122,12 +122,19 @@ Giai đoạn 4, đã làm:
 - Bỏ trao đổi MTU khi kết nối hằng ngày, xin chu kỳ kết nối ngắn, ghi log thời gian (tag `DoorTiming`, chỉ bản debug).
 - Ô Quick Settings mở app.
 - `INFO` báo nguồn: firmware notify khi giá trị đổi, giá trị giả đặt bằng lệnh serial `power mains|battery [0-100]`. App đọc `INFO` ngay sau khi sẵn sàng, nên không làm chậm lúc bấm được. Khi board chạy pin, app hiện "Mất điện" kèm phần trăm pin và làm mờ bốn nút. Đã chạy thử trên máy thật: đổi nguồn qua serial thì app đổi theo ngay, mở app lúc board đang chạy pin thì hiện đúng.
+- App gọi `connect()` ngay khi đọc xong thiết bị đã lưu, không chờ màn điều khiển vẽ xong. `MainActivity` lấy cùng `ControlViewModel` với màn điều khiển (theo key) và gọi `start()` sớm; màn điều khiển vẫn tự gọi `start()` khi người dùng vừa cấp quyền hay bật Bluetooth trên màn hình.
 
-Giai đoạn 4, số đo sau khi bỏ MTU (cùng tablet, force-stop rồi mở lại, 10 lần): từ `start()` tới sẵn sàng 1,06 đến 1,28 giây; kết nối 0,47 đến 0,59 giây; setup 0,51 đến 0,75 giây. Tính từ lúc chạm icon thì khoảng 1,6 đến 1,9 giây, vì bản release mất 0,58 đến 0,77 giây từ lúc tạo process tới lúc gọi `connect()` (bản debug chậm gấp khoảng 5 lần, không dùng để đo đoạn này). Setup lâu hơn trước vì Android discover lại toàn bộ dịch vụ mỗi lần (ESP32-S3 là Bluetooth 5.0, Android không dùng cache) và mấy bước discover đầu chạy ở chu kỳ kết nối chậm. Việc còn lại, làm cuối giai đoạn 4:
+Giai đoạn 4, số đo sau khi bỏ MTU (cùng tablet, force-stop rồi mở lại, 10 lần): từ `start()` tới sẵn sàng 1,06 đến 1,28 giây; kết nối 0,47 đến 0,59 giây; setup 0,51 đến 0,75 giây. Tính từ lúc chạm icon thì khoảng 1,6 đến 1,9 giây, vì bản release mất 0,58 đến 0,77 giây từ lúc tạo process tới lúc gọi `connect()` (bản debug chậm gấp khoảng 5 lần, không dùng để đo đoạn này). Setup lâu hơn trước vì Android discover lại toàn bộ dịch vụ mỗi lần (ESP32-S3 là Bluetooth 5.0, Android không dùng cache) và mấy bước discover đầu chạy ở chu kỳ kết nối chậm.
 
-- Kết nối khoảng 0,5 giây không phải do chu kỳ quảng bá: board đã quảng bá 20–30 ms (nhánh `esp32`, commit `a82a387`) mà số đo không đổi. Từ `connect()` tới lúc có liên kết LE mất khoảng 0,58 giây, cần xem thông số kết nối phía Android (HCI snoop log).
-- ESP xin chu kỳ kết nối ngắn ngay khi vừa kết nối, để discover chạy nhanh từ bước đầu.
-- App gọi `connect()` ngay khi đọc xong thiết bị đã lưu, không chờ màn điều khiển vẽ xong.
+Giai đoạn 4, số đo sau khi gọi `connect()` sớm (cùng tablet, bản release, 8 lần mỗi bản): từ lúc tạo process tới `connect()` còn 605–646 ms, trước là 652–739 ms, tức nhanh hơn khoảng 70 ms. Bản release có bật log `DoorTiming` (bản tạm, không commit): kiểm tra thiết bị đã lưu lúc mở app mất 206–239 ms, `start()` chạy sau khi tạo process 503–547 ms, từ `start()` tới sẵn sàng 924–1199 ms, trong đó setup 684–792 ms. Log của `BluetoothGatt` cho thấy từ `connect()` tới lúc có kết nối dao động 133–578 ms, có kết nối rồi thì app nhận gần như ngay.
+
+Cách đo: app cài bằng `adb install` chạy chưa biên dịch (`run-from-apk`), chậm gấp khoảng 3 lần. Trước khi đo phải chạy `adb shell cmd package compile -m speed -f com.trananh.rollingdoor`, rồi bỏ lần mở đầu tiên. Bản release không có log `DoorTiming`, nên đo bằng log hệ thống: `Start proc` của `ActivityManager` và `connect()`, `onClientConnectionState()` của `BluetoothGatt`.
+
+Việc còn lại, làm cuối giai đoạn 4:
+
+- Kiểm tra Keystore lúc mở app (`discardIncomplete`) chạy trước khi biết thiết bị đã lưu, nên `connect()` phải chờ. Cách sửa: báo thiết bị đã lưu ngay khi đọc xong DataStore, kiểm tra Keystore song song. Khóa mất thì lúc ký lệnh vẫn báo lỗi khóa.
+- ESP xin chu kỳ kết nối ngắn ngay khi vừa kết nối, để discover chạy nhanh từ bước đầu. Setup giờ là đoạn lâu nhất.
+- Kết nối dao động 0,13–0,58 giây không phải do chu kỳ quảng bá: board đã quảng bá 20–30 ms (nhánh `esp32`, commit `a82a387`) mà số đo không đổi. Cần xem thông số kết nối phía Android (HCI snoop log).
 
 Giai đoạn 7, lỗ hổng cần sửa: "Quên thiết bị" hiện chỉ xóa khóa trên điện thoại, ô khóa vẫn nằm trong bảng của board. Lệnh `07` không cho admin tự thu hồi mình, nên admin quên thiết bị thì board không còn ai có quyền admin, và muốn lấy lại phải giữ KEY 10 giây, xóa sạch khóa của mọi máy. Cách sửa: khi quên thiết bị, app gửi lệnh mới nhờ board xóa ô của chính nó. Những điểm cần quyết khi thiết kế:
 

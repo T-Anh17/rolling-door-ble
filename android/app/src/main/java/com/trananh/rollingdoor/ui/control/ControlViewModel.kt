@@ -94,6 +94,10 @@ class ControlViewModel(newConnection: (CoroutineScope) -> DoorConnection) : View
     }
 
     companion object {
+        // Keyed by slot too: pairing the same device again gives a new key. MainActivity and
+        // ControlScreen both get the ViewModel by this key, so they share one connection.
+        fun key(device: SavedDevice) = "control-${device.mac}-${device.keyId}"
+
         fun factory(device: SavedDevice) = viewModelFactory {
             initializer {
                 val container = (this[APPLICATION_KEY] as RollingDoorApp).container

@@ -61,15 +61,16 @@ import com.trananh.rollingdoor.ui.theme.RollingDoorTheme
 // Everything else (device info, admin actions, Forget device) lives in Settings.
 @Composable
 fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onForget: () -> Unit) {
-    // Keyed by slot too: pairing the same device again gives a new key.
     val viewModel: ControlViewModel = viewModel(
-        key = "control-${device.mac}-${device.keyId}",
+        key = ControlViewModel.key(device),
         factory = ControlViewModel.factory(device),
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     val gate = rememberBluetoothGate(adapter, forPairing = false)
 
     // Connected only while the screen is visible and Bluetooth is usable; losing either stops it.
+    // MainActivity usually starts it before this first composes; start() then does nothing, and
+    // this still starts it once Bluetooth becomes usable on screen.
     if (gate.status == GateStatus.Ready) {
         LifecycleStartEffect(viewModel) {
             viewModel.start()

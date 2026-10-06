@@ -1,6 +1,9 @@
 package com.trananh.rollingdoor.ui
 
 import android.bluetooth.BluetoothAdapter
+import android.content.pm.ApplicationInfo
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.ViewModel
@@ -31,10 +34,17 @@ sealed interface RootState {
     data class Paired(val device: SavedDevice) : RootState
 }
 
-class RootViewModel(private val repository: DeviceRepository) : ViewModel() {
+// logTiming: debug builds log how long the startup check takes (tag DoorTiming), since the
+// connection only starts after it.
+class RootViewModel(
+    private val repository: DeviceRepository,
+    private val logTiming: Boolean,
+) : ViewModel() {
     val state: StateFlow<RootState> = flow {
         // A pairing that crashed before its confirming Ping leaves nothing usable: drop it.
+        val checkAt = SystemClock.elapsedRealtime()
         runCatching { repository.discardIncomplete() }
+        if (logTiming) Log.d("DoorTiming", "saved device checked in ${SystemClock.elapsedRealtime() - checkAt} ms")
         emitAll(repository.device.map { if (it == null) RootState.NotPaired else RootState.Paired(it) })
     }.stateIn(viewModelScope, SharingStarted.Eagerly, RootState.Loading)
 
@@ -45,7 +55,9 @@ class RootViewModel(private val repository: DeviceRepository) : ViewModel() {
     companion object {
         val Factory = viewModelFactory {
             initializer {
-                RootViewModel((this[APPLICATION_KEY] as RollingDoorApp).container.repository)
+                val app = this[APPLICATION_KEY] as RollingDoorApp
+                val debuggable = app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+                RootViewModel(app.container.repository, logTiming = debuggable)
             }
         }
     }
