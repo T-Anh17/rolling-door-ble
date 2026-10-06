@@ -159,6 +159,8 @@ The app declares both sets of Bluetooth permissions. On Android 11 and older, sc
 
 Once paired, the app opens straight on the control screen: the connection status and the four buttons, nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone** for the admin, and **Forget device**, which removes the key from this phone only.
 
+The app follows the phone's language: Vietnamese on a Vietnamese phone, English otherwise. On Android 13 and newer it can also be set for this app alone in the system's app language setting.
+
 ### Setting up a new device
 
 Every board makes its own pairing QR code. The source code contains no secrets, so building from this repository never gives you someone else's code, and your code never ends up in the repository.

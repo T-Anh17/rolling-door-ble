@@ -3,10 +3,10 @@
 
     <!-- Bluetooth gate -->
     <string name="gate_permission_title">Allow nearby devices</string>
-    <string name="gate_permission_body">The app needs the Nearby devices permission to find and connect to your rolling door.</string>
+    <string name="gate_permission_body">The app needs the Nearby devices permission to connect to the door.</string>
     <string name="gate_location_permission_title">Allow location</string>
-    <string name="gate_location_permission_body">On Android 11 and below, scanning for Bluetooth devices needs the location permission. It is only used while pairing; the app never reads where you are.</string>
-    <string name="gate_permission_blocked_body">The permission was turned down. Open the app settings and allow it there.</string>
+    <string name="gate_location_permission_body">Android 11 and below need the location permission to find the device. It is only used while pairing; the app never reads where you are.</string>
+    <string name="gate_permission_blocked_body">You turned this permission down. Open Settings to allow it again.</string>
     <string name="gate_allow">Allow</string>
     <string name="gate_open_settings">Open settings</string>
     <string name="gate_bluetooth_off_title">Bluetooth is off</string>
@@ -18,10 +18,10 @@
 
     <!-- Pairing -->
     <string name="pairing_title">Pairing</string>
-    <string name="pairing_intro">Scan the QR code printed by the device so this phone can control the door. The first phone to pair becomes the admin.</string>
+    <string name="pairing_intro">Scan the QR code on the device to control the door. The first phone to pair becomes the admin.</string>
     <string name="pairing_scan">Scan QR code</string>
     <string name="pairing_enter_manually">Enter code manually</string>
-    <string name="pairing_manual_label">Paste the setup code, starting with RDOOR1:</string>
+    <string name="pairing_manual_label">Paste the code starting with RDOOR1:</string>
     <string name="pairing_manual_invalid">This is not a valid setup code</string>
     <string name="pairing_pair">Pair</string>
     <string name="pairing_cancel">Cancel</string>
@@ -31,31 +31,31 @@
     <string name="pairing_step_connect">Connect</string>
     <string name="pairing_step_key">Exchange key</string>
     <string name="pairing_step_confirm">Confirm</string>
-    <string name="pairing_closed_hint">The device is not advertising open pairing. If another phone is already paired, hold the BOOT button for 3 seconds.</string>
+    <string name="pairing_closed_hint">The device is not open for pairing. If another phone is already paired, hold the BOOT button for 3 seconds.</string>
     <string name="pairing_error_invalid_code">Not a rolling door code</string>
-    <string name="pairing_error_invalid_code_body">Scan the QR code printed by the device. Its text starts with RDOOR1.</string>
+    <string name="pairing_error_invalid_code_body">A door code starts with RDOOR1. Scan the QR code on the device again.</string>
     <string name="pairing_error_camera_permission">Camera not allowed</string>
     <string name="pairing_error_camera_permission_body">Allow the camera to scan the QR code, or enter the code manually below.</string>
     <string name="pairing_error_camera">Cannot open the camera</string>
-    <string name="pairing_error_camera_body">The camera is busy or unavailable. Enter the code manually below.</string>
+    <string name="pairing_error_camera_body">The camera is busy. Enter the code manually below.</string>
     <string name="pairing_error_bluetooth_off">Bluetooth is off</string>
     <string name="pairing_error_bluetooth_off_body">Turn on Bluetooth and try again.</string>
     <string name="pairing_error_permission">Bluetooth permission missing</string>
     <string name="pairing_error_permission_body">Allow nearby devices for this app and try again.</string>
     <string name="pairing_error_not_found">Device not found</string>
-    <string name="pairing_error_not_found_body">Stand close to the door, check that the device has power, and try again.</string>
+    <string name="pairing_error_not_found_body">Stand close to the door, check that the device has power, then try again.</string>
     <string name="pairing_error_connection">Connection lost</string>
-    <string name="pairing_error_connection_body">The connection dropped while pairing. Move closer to the device and try again.</string>
+    <string name="pairing_error_connection_body">Move closer to the device and try again.</string>
     <string name="pairing_error_closed">Pairing is closed</string>
     <string name="pairing_error_closed_body">Hold the BOOT button on the device for 3 seconds, then try again.</string>
-    <string name="pairing_error_wrong_code">Wrong QR code for this device</string>
-    <string name="pairing_error_wrong_code_body">This code belongs to another device. Scan the code printed by this device.</string>
+    <string name="pairing_error_wrong_code">Wrong QR code</string>
+    <string name="pairing_error_wrong_code_body">This QR code is wrong or belongs to another device.</string>
     <string name="pairing_error_locked_out">Locked for 60 seconds</string>
-    <string name="pairing_error_locked_out_body">Too many failed attempts. Wait a minute and try again.</string>
-    <string name="pairing_error_table_full">Device already has 8 phones</string>
-    <string name="pairing_error_table_full_body">Remove a paired phone before adding a new one.</string>
+    <string name="pairing_error_locked_out_body">Too many failed attempts. Wait 1 minute and try again.</string>
+    <string name="pairing_error_table_full">Already 8 phones paired</string>
+    <string name="pairing_error_table_full_body">Remove a paired phone, then try again.</string>
     <string name="pairing_error_invalid_response">Invalid response</string>
-    <string name="pairing_error_invalid_response_body">The device answered something unexpected. Try again; if it keeps failing, check the firmware.</string>
+    <string name="pairing_error_invalid_response_body">Try again, or check the firmware.</string>
 
     <!-- QR scanner -->
     <string name="scanner_hint">Point the camera at the QR code</string>
@@ -77,14 +77,14 @@
     <string name="control_retry_now">Try now</string>
     <string name="control_hint_out_of_range">Connects by itself when you are near the door.</string>
     <string name="control_hint_failed">Check that the device has power, then try again.</string>
-    <string name="control_hint_unsupported">The device firmware does not match this app.</string>
-    <string name="control_message_pairing_opened">Pairing is open for 60 seconds. Scan the device’s QR code on the new phone.</string>
-    <string name="control_message_no_reply">The door did not answer. Check the door before pressing again.</string>
-    <string name="control_message_key_rejected">The device no longer accepts this phone. Forget the device in Settings and pair again.</string>
-    <string name="control_message_locked_out">Too many failed attempts. Wait a minute and try again.</string>
-    <string name="control_message_rf_failed">The device could not send the signal to the door.</string>
+    <string name="control_hint_unsupported">The device firmware does not match the app.</string>
+    <string name="control_message_pairing_opened">Pairing is open for 60 seconds. Scan the QR code on the new phone to connect.</string>
+    <string name="control_message_no_reply">The door did not answer. Check the door before trying again.</string>
+    <string name="control_message_key_rejected">The device no longer accepts this phone. Pair it again.</string>
+    <string name="control_message_locked_out">Too many failed attempts. Wait 1 minute and try again.</string>
+    <string name="control_message_rf_failed">Could not send the signal to the door.</string>
     <string name="control_message_not_permitted">Only the admin phone can do this.</string>
-    <string name="control_message_unexpected">The device answered something unexpected.</string>
+    <string name="control_message_unexpected">The device sent an invalid response.</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -96,8 +96,8 @@
     <string name="settings_role_normal">Member</string>
     <string name="settings_section_admin">Admin</string>
     <string name="settings_add_phone">Add phone</string>
-    <string name="settings_add_phone_footer">Opens pairing for 60 seconds. Within that time, scan this device’s QR code on the new phone. Needs a connection to the door.</string>
+    <string name="settings_add_phone_footer">Opens pairing for 60 seconds. Scan the QR code on the new phone within that time.</string>
     <string name="settings_forget_title">Forget device?</string>
-    <string name="settings_forget_body">This phone will no longer control the door until it pairs again with the device’s QR code. The device keeps this phone’s key slot until an admin removes it or the device is reset.</string>
+    <string name="settings_forget_body">This phone will not control the door until it pairs again with the QR code.</string>
     <string name="settings_cancel">Cancel</string>
 </resources>
