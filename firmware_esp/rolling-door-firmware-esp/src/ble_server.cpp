@@ -31,9 +31,16 @@ void post(Event::Type type, uint16_t connHandle, const uint8_t* data = nullptr, 
 }
 
 class ServerCallbacks : public NimBLEServerCallbacks {
+  // The phone picks the connection interval and changes it itself (~49ms at first, then 7.5ms
+  // a few hundred ms later); asking from here only arrives after that, so the board just logs it.
   void onConnect(NimBLEServer*, NimBLEConnInfo& connInfo) override {
-    Serial.printf("[BLE] connected %s\n", connInfo.getAddress().toString().c_str());
+    Serial.printf("[BLE] connected %s, interval %.2fms\n", connInfo.getAddress().toString().c_str(),
+                  connInfo.getConnInterval() * 1.25f);
     post(Event::Type::Connected, connInfo.getConnHandle());
+  }
+
+  void onConnParamsUpdate(NimBLEConnInfo& connInfo) override {
+    Serial.printf("[BLE] interval %.2fms\n", connInfo.getConnInterval() * 1.25f);
   }
 
   void onDisconnect(NimBLEServer*, NimBLEConnInfo& connInfo, int reason) override {

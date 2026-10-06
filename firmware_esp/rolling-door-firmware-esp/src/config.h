@@ -15,9 +15,11 @@ constexpr const char* kStatusUuid    = "a7930004-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kInfoUuid      = "a7930005-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kPairingUuid   = "a7930006-966e-4240-b881-5c2e2f2203a8";
 
-// Advertising interval in units of 0.625ms: 160 = 100ms, 320 = 200ms.
-constexpr uint16_t kAdvMinInterval = 160;
-constexpr uint16_t kAdvMaxInterval = 320;
+// Advertising interval in units of 0.625ms: 32 = 20ms, 48 = 30ms. Short, so a phone that
+// connects directly finds the board within one or two of its scan windows. Costs more power,
+// which only matters on battery (phase 6 can lengthen it there).
+constexpr uint16_t kAdvMinInterval = 32;
+constexpr uint16_t kAdvMaxInterval = 48;
 // Scan response manufacturer data while pairing is open: [company id 0xFFFF][0x01].
 constexpr uint16_t kManufacturerId = 0xFFFF;
 
