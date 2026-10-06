@@ -25,7 +25,7 @@ rolling-door-ble/
 │       ├── crypto/                           HKDF, ghép đôi ECDH, ký lệnh, Android Keystore
 │       ├── data/                             DeviceRepository (DataStore + PhoneKeyStore)
 │       ├── protocol/                         UUID, khung lệnh, phân tích mã QR
-│       └── ui/                               Theme, components, gate quyền Bluetooth, ghép đôi
+│       └── ui/                               Theme, components, gate quyền Bluetooth, ghép đôi, điều khiển
 │   └── app/src/brand/                        Icon và logo splash riêng (không có trong repo)
 ├── firmware_esp/rolling-door-firmware-esp/   Firmware ESP32-S3 (PlatformIO, Arduino)
 │   ├── platformio.ini
@@ -105,12 +105,12 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 |---|---|---|
 | 1 | Khung BLE: GATT server trên ESP32, lớp RF giả | Xong |
 | 2 | Ghép đôi bằng QR, bảng khóa, kiểm tra HMAC, quyền admin | Xong |
-| 3 | App Android: ghép đôi, màn hình bốn nút, tự kết nối | Đang làm |
+| 3 | App Android: ghép đôi, màn hình bốn nút, tự kết nối | Xong |
 | 4 | Hoàn thiện: dưới 1 giây từ lúc mở đến sẵn sàng, xử lý mất kết nối, trạng thái nguồn | Chưa |
 | 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
 | 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, lắp pin và mạch phát hiện điện lưới | Chưa |
 | 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Chưa |
 
-Giai đoạn 3, đã xong: giao thức và crypto ghép đôi (có unit test), lưu khóa trong Android Keystore, GATT client và tự kết nối lại, màn hình ghép đôi, máy quét QR offline, gate quyền Bluetooth, design tokens và components, icon app.
+Giai đoạn 3 gồm: giao thức và crypto ghép đôi (có unit test), lưu khóa trong Android Keystore, GATT client và tự kết nối lại, màn hình ghép đôi, máy quét QR offline, gate quyền Bluetooth, design tokens và components, icon app, màn hình điều khiển (trạng thái và bốn nút, không cuộn) và sheet Cài đặt (thông tin thiết bị, Thêm điện thoại cho admin, Quên thiết bị). Đã chạy thử trên máy thật với board: bốn lệnh tới board và trả `0x00`, Thêm điện thoại mở ghép đôi, ẩn app thì ngắt kết nối, mở lại thì tự kết nối.
 
-Giai đoạn 3, còn lại: màn hình điều khiển (trạng thái và bốn nút, không cuộn), hiện đang là màn hình tạm trong `ui/RootScreen.kt`.
+Giai đoạn 4, số đo ban đầu (tablet Android, đo bằng logcat và serial log): từ lúc mở app tới lúc sẵn sàng mất 1,45 đến 2,2 giây. Trong đó khởi động app tới lúc gọi `connect()` khoảng 0,32 giây; kết nối BLE 0,15 đến 0,98 giây, tùy chu kỳ quảng bá của ESP; trao đổi MTU khoảng 0,65 giây, lần nào cũng vậy; discover, bật notify và đọc CHALLENGE khoảng 0,3 giây. Lệnh hằng ngày chỉ 18 byte, vừa MTU mặc định, nên có thể bỏ `requestMtu` khi kết nối hằng ngày; chỉ ghép đôi mới cần MTU lớn.

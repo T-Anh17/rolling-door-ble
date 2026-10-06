@@ -6,7 +6,7 @@ An ESP32-S3 sits near the door and replays the fixed codes of the original RF re
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** phase 3 in progress. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only). The app can pair by scanning the QR code; the control screen is not built yet. See [Roadmap](#roadmap).
+> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only). The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Next is phase 4: under 1 second from launch to ready. See [Roadmap](#roadmap).
 
 > **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
@@ -157,6 +157,8 @@ BLE does not work in the emulator; use a real device.
 
 The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.
 
+Once paired, the app opens straight on the control screen: the connection status and the four buttons, nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone** for the admin, and **Forget device**, which removes the key from this phone only.
+
 ### Setting up a new device
 
 Every board makes its own pairing QR code. The source code contains no secrets, so building from this repository never gives you someone else's code, and your code never ends up in the repository.
@@ -185,7 +187,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 
 - [x] **Phase 1 – BLE skeleton:** GATT server on the ESP32 with a fake RF layer (serial log only)
 - [x] **Phase 2 – Pairing and authentication:** QR code pairing, key table, HMAC check, admin role
-- [ ] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
+- [x] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
 - [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, power status in the app
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
 - [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, fit battery and mains detection
