@@ -37,8 +37,6 @@ import com.trananh.rollingdoor.data.SavedDevice
 import com.trananh.rollingdoor.protocol.ButtonIcon
 import com.trananh.rollingdoor.protocol.ButtonList
 import com.trananh.rollingdoor.protocol.Command
-import com.trananh.rollingdoor.protocol.PowerInfo
-import com.trananh.rollingdoor.protocol.PowerSource
 import com.trananh.rollingdoor.protocol.RemoteButton
 import com.trananh.rollingdoor.protocol.Role
 import com.trananh.rollingdoor.ui.components.BannerHost
@@ -81,6 +79,7 @@ fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?) {
     }
 
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var settingsAtButtons by rememberSaveable { mutableStateOf(false) } // opened from "Learn codes"
     // The banner sits under the sheet: close the sheet when a command fails.
     LaunchedEffect(state.message) {
         if (state.message != null) settingsOpen = false
@@ -100,11 +99,20 @@ fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?) {
         onPress = viewModel::press,
         onRetry = viewModel::retryNow,
         onDismissMessage = viewModel::dismissMessage,
-        onOpenSettings = { settingsOpen = true },
+        onOpenSettings = {
+            settingsAtButtons = false
+            settingsOpen = true
+        },
+        onLearnCodes = {
+            settingsAtButtons = true
+            settingsOpen = true
+        },
     )
     if (settingsOpen) {
         SettingsSheet(
             device = device,
+            startAtButtons = settingsAtButtons,
+            power = state.power,
             canAddPhone = state.connection == ConnectionState.Ready && state.sending == null,
             buttons = ButtonActions(
                 state.buttons,
@@ -150,6 +158,7 @@ private fun ControlContent(
     onRetry: () -> Unit,
     onDismissMessage: () -> Unit,
     onOpenSettings: () -> Unit,
+    onLearnCodes: () -> Unit,
 ) {
     val banner = rememberBanner(state.message, onOpenSettings)
     NavBarScaffold(
@@ -165,7 +174,7 @@ private fun ControlContent(
                 GateContent(gate)
             }
         } else {
-            ConnectionStatus(state.connection, state.power, onRetry)
+            ConnectionStatus(state.connection, learnHint(state), isAdmin, onRetry, onLearnCodes)
             ButtonGrid(state, isAdmin, onPress, Modifier.fillMaxWidth().weight(1f))
         }
     }
@@ -205,34 +214,50 @@ private fun ButtonGrid(state: ControlUiState, isAdmin: Boolean, onPress: (Int) -
     }
 }
 
+// Connected, with buttons the board has no code for: a new board has none, and its buttons stay
+// dimmed until the admin learns them from the remote.
+private enum class LearnHint { NoneLearned, SomeNotLearned }
+
+private fun learnHint(state: ControlUiState): LearnHint? {
+    val connected = state.connection == ConnectionState.Ready || state.connection == ConnectionState.Busy
+    val learned = state.learned ?: return null
+    val buttons = state.buttons.buttons
+    if (!connected || buttons.isEmpty()) return null
+    return when (buttons.count { it.id !in learned }) {
+        0 -> null
+        buttons.size -> LearnHint.NoneLearned
+        else -> LearnHint.SomeNotLearned
+    }
+}
+
 // The pill, "Try now" while out of range or failed, and a line saying what happens next.
-// With large text "Try now" moves below the pill instead of squeezing it.
-// Connected on battery means a power cut: the board is up but the door cannot move.
+// Connected, the line says which buttons still need their code, with "Learn codes" for the admin.
+// With large text the link moves below the pill instead of squeezing it.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ConnectionStatus(connection: ConnectionState, power: PowerInfo?, onRetry: () -> Unit) {
-    val connected = connection == ConnectionState.Ready || connection == ConnectionState.Busy
-    val powerOut = connected && power?.onBattery == true
-    val (text, tone) = if (powerOut) {
-        R.string.control_status_power_out to StatusTone.Problem
-    } else {
-        when (connection) {
-            ConnectionState.Idle, ConnectionState.Connecting -> R.string.control_status_connecting to StatusTone.Pending
-            ConnectionState.WaitingInRange -> R.string.control_status_out_of_range to StatusTone.Pending
-            ConnectionState.Ready, ConnectionState.Busy -> R.string.control_status_ready to StatusTone.Ready
-            ConnectionState.BluetoothOff -> R.string.control_status_bluetooth_off to StatusTone.Problem
-            is ConnectionState.Error -> R.string.control_status_failed to StatusTone.Problem
-        }
+private fun ConnectionStatus(
+    connection: ConnectionState,
+    learn: LearnHint?,
+    isAdmin: Boolean,
+    onRetry: () -> Unit,
+    onLearnCodes: () -> Unit,
+) {
+    val (text, tone) = when (connection) {
+        ConnectionState.Idle, ConnectionState.Connecting -> R.string.control_status_connecting to StatusTone.Pending
+        ConnectionState.WaitingInRange -> R.string.control_status_out_of_range to StatusTone.Pending
+        ConnectionState.Ready, ConnectionState.Busy -> R.string.control_status_ready to StatusTone.Ready
+        ConnectionState.BluetoothOff -> R.string.control_status_bluetooth_off to StatusTone.Problem
+        is ConnectionState.Error -> R.string.control_status_failed to StatusTone.Problem
     }
     val canRetry = connection == ConnectionState.WaitingInRange || connection is ConnectionState.Error
     val hint = when {
-        powerOut -> power?.batteryPercent
-            ?.let { stringResource(R.string.control_hint_power_out_battery, it) }
-            ?: stringResource(R.string.control_hint_power_out)
         connection == ConnectionState.WaitingInRange -> stringResource(R.string.control_hint_out_of_range)
         connection is ConnectionState.Error && connection.error == LinkError.Unsupported ->
             stringResource(R.string.control_hint_unsupported)
         connection is ConnectionState.Error -> stringResource(R.string.control_hint_failed)
+        learn == LearnHint.NoneLearned && isAdmin -> stringResource(R.string.control_hint_none_learned)
+        learn == LearnHint.NoneLearned -> stringResource(R.string.control_hint_none_learned_normal)
+        learn == LearnHint.SomeNotLearned -> stringResource(R.string.control_hint_some_not_learned)
         else -> null
     }
     Column(verticalArrangement = Arrangement.spacedBy(DoorTheme.spacing.xxs)) {
@@ -240,6 +265,8 @@ private fun ConnectionStatus(connection: ConnectionState, power: PowerInfo?, onR
             StatusPill(stringResource(text), tone, Modifier.align(Alignment.CenterVertically))
             if (canRetry) {
                 TextLink(stringResource(R.string.control_retry_now), onRetry, Modifier.align(Alignment.CenterVertically))
+            } else if (learn != null && isAdmin) {
+                TextLink(stringResource(R.string.control_learn_codes), onLearnCodes, Modifier.align(Alignment.CenterVertically))
             }
         }
         if (hint != null) {
@@ -248,7 +275,7 @@ private fun ConnectionStatus(connection: ConnectionState, power: PowerInfo?, onR
     }
 }
 
-// Skeleton while connecting, dimmed while not connected, during a power cut, or while the board
+// Skeleton while connecting, dimmed while not connected, or while the board
 // has no code for this button. While a command is in flight its button shows a spinner and the
 // others are dimmed. Before INFO is read (learned == null) all buttons stay enabled.
 @Composable
@@ -261,7 +288,6 @@ private fun RemoteButton(
 ) {
     val view = LocalView.current
     val connected = state.connection == ConnectionState.Ready || state.connection == ConnectionState.Busy
-    val powerOut = state.power?.onBattery == true
     val hasCode = state.learned?.contains(button.id) ?: true
     val pressing = state.pressing == button.id
     DoorButton(
@@ -274,7 +300,7 @@ private fun RemoteButton(
         },
         modifier = modifier.fillMaxHeight(),
         tall = tall,
-        enabled = connected && !powerOut && hasCode && (state.sending == null || pressing),
+        enabled = connected && hasCode && (state.sending == null || pressing),
         sending = pressing,
         placeholder = state.connection == ConnectionState.Idle || state.connection == ConnectionState.Connecting,
     )
@@ -323,6 +349,7 @@ private fun ControlPreview(state: ControlUiState) = RollingDoorTheme {
             onRetry = {},
             onDismissMessage = {},
             onOpenSettings = {},
+            onLearnCodes = {},
         )
     }
 }
@@ -335,6 +362,11 @@ private fun ControlReadyPreview() = ControlPreview(ControlUiState(ConnectionStat
 @Composable
 private fun ControlPartlyLearnedPreview() =
     ControlPreview(ControlUiState(ConnectionState.Ready, learned = setOf(1, 2)))
+
+@DoorPreviews
+@Composable
+private fun ControlNothingLearnedPreview() =
+    ControlPreview(ControlUiState(ConnectionState.Ready, learned = emptySet()))
 
 @DoorPreviews
 @Composable
@@ -380,10 +412,6 @@ private fun ControlConnectingPreview() = ControlPreview(ControlUiState(Connectio
 @Composable
 private fun ControlOutOfRangePreview() = ControlPreview(ControlUiState(ConnectionState.WaitingInRange))
 
-@DoorPreviews
-@Composable
-private fun ControlPowerOutPreview() =
-    ControlPreview(ControlUiState(ConnectionState.Ready, power = PowerInfo(PowerSource.Battery, 80)))
 
 @DoorPreviews
 @Composable

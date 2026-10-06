@@ -74,13 +74,14 @@
     <string name="control_status_out_of_range">Ngoài vùng</string>
     <string name="control_status_bluetooth_off">Bluetooth đang tắt</string>
     <string name="control_status_failed">Không kết nối được</string>
-    <string name="control_status_power_out">Mất điện</string>
     <string name="control_retry_now">Thử lại ngay</string>
     <string name="control_hint_out_of_range">Sẽ tự kết nối khi bạn lại gần cửa.</string>
     <string name="control_hint_failed">Kiểm tra thiết bị có điện rồi thử lại.</string>
+    <string name="control_hint_none_learned">Chưa học lệnh từ remote nên các nút chưa dùng được.</string>
+    <string name="control_hint_none_learned_normal">Chưa học lệnh từ remote nên các nút chưa dùng được. Nhờ quản trị viên học lệnh.</string>
+    <string name="control_hint_some_not_learned">Nút mờ là nút chưa học lệnh.</string>
+    <string name="control_learn_codes">Học lệnh</string>
     <string name="control_hint_unsupported">Firmware thiết bị không khớp với ứng dụng.</string>
-    <string name="control_hint_power_out">Cửa không chạy được khi mất điện.</string>
-    <string name="control_hint_power_out_battery">Cửa không chạy được khi mất điện. Pin thiết bị còn %1$d%%.</string>
     <string name="control_message_no_reply">Cửa không phản hồi. Hãy kiểm tra lại cửa trước khi thử lại.</string>
     <string name="control_message_key_rejected">Thiết bị không nhận máy này nữa. Hãy ghép đôi lại.</string>
     <string name="control_message_locked_out">Thao tác sai quá nhiều lần. Vui lòng chờ 1 phút rồi thử lại.</string>
@@ -99,6 +100,9 @@
     <string name="settings_address">Địa chỉ</string>
     <string name="settings_role">Vai trò</string>
     <string name="settings_role_admin">Quản trị viên</string>
+    <string name="settings_battery">Pin</string>
+    <string name="settings_battery_charging">Đang sạc</string>
+    <string name="settings_battery_percent">%1$d%%</string>
     <string name="settings_section_admin">Quản trị</string>
     <string name="settings_add_phone">Thêm điện thoại</string>
     <string name="settings_add_watch">Thêm đồng hồ</string>
@@ -150,7 +154,7 @@
     <string name="make_admin_failed">Chưa chuyển được. Thử lại.</string>
     <string name="forget_must_hand_over">Hãy đặt một máy khác làm quản trị viên trước, trong mục Điện thoại.</string>
     <string name="forget_offline">Không kết nối được thiết bị. Máy này vẫn giữ chỗ trên thiết bị cho đến khi quản trị viên thu hồi.</string>
-    <string name="forget_offline_admin">Lại gần thiết bị rồi thử lại. Quên lúc này thì thiết bị sẽ không còn quản trị viên.</string>
+    <string name="forget_offline_admin">Không kết nối được thiết bị. Quên lúc này thì thiết bị không còn quản trị viên; muốn có lại phải giữ nút KEY trên thiết bị 10 giây, mọi máy sẽ phải ghép đôi lại. Nếu thiết bị đã hỏng thì cứ quên.</string>
     <string name="forget_failed">Chưa quên được. Thử lại.</string>
     <string name="forget_anyway">Vẫn quên</string>
     <string name="invite_hint">Trên máy mới, mở app rồi quét mã này, hoặc chọn Nhập mã và gõ 8 số.</string>
