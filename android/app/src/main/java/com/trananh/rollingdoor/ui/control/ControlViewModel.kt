@@ -12,6 +12,7 @@ import com.trananh.rollingdoor.ble.DoorConnection
 import com.trananh.rollingdoor.data.SavedDevice
 import com.trananh.rollingdoor.protocol.Command
 import com.trananh.rollingdoor.protocol.CommandResult
+import com.trananh.rollingdoor.protocol.PowerInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,6 +35,7 @@ enum class ControlMessage {
 
 data class ControlUiState(
     val connection: ConnectionState = ConnectionState.Idle,
+    val power: PowerInfo? = null, // known only while connected
     val sending: Command? = null, // in flight; the other buttons wait for it
     val message: ControlMessage? = null,
 )
@@ -44,8 +46,9 @@ class ControlViewModel(newConnection: (CoroutineScope) -> DoorConnection) : View
     private val sending = MutableStateFlow<Command?>(null)
     private val message = MutableStateFlow<ControlMessage?>(null)
 
-    val state: StateFlow<ControlUiState> = combine(connection.state, sending, message, ::ControlUiState)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, ControlUiState())
+    val state: StateFlow<ControlUiState> =
+        combine(connection.state, connection.power, sending, message, ::ControlUiState)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, ControlUiState())
 
     // Called while the screen is visible and Bluetooth is usable.
     fun start() = connection.start()

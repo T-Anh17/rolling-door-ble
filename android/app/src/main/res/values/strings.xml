@@ -74,10 +74,13 @@
     <string name="control_status_out_of_range">Out of range</string>
     <string name="control_status_bluetooth_off">Bluetooth is off</string>
     <string name="control_status_failed">Cannot connect</string>
+    <string name="control_status_power_out">Power outage</string>
     <string name="control_retry_now">Try now</string>
     <string name="control_hint_out_of_range">Connects by itself when you are near the door.</string>
     <string name="control_hint_failed">Check that the device has power, then try again.</string>
     <string name="control_hint_unsupported">The device firmware does not match the app.</string>
+    <string name="control_hint_power_out">The door cannot move without power.</string>
+    <string name="control_hint_power_out_battery">The door cannot move without power. Device battery: %1$d%%.</string>
     <string name="control_message_pairing_opened">Pairing is open for 60 seconds. Scan the QR code on the new phone to connect.</string>
     <string name="control_message_no_reply">The door did not answer. Check the door before trying again.</string>
     <string name="control_message_key_rejected">The device no longer accepts this phone. Pair it again.</string>

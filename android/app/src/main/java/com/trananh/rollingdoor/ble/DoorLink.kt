@@ -5,9 +5,12 @@ import android.content.Context
 import android.os.SystemClock
 import com.trananh.rollingdoor.protocol.CommandResult
 import com.trananh.rollingdoor.protocol.DoorProtocol
+import com.trananh.rollingdoor.protocol.PowerInfo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
@@ -26,6 +29,10 @@ class DoorLink(context: Context, device: BluetoothDevice) {
     private val nonce = MutableStateFlow<NonceState>(NonceState.None)
     private val statuses = Channel<ByteArray>(Channel.UNLIMITED)
     private val down = CompletableDeferred<Unit>()
+    private val _power = MutableStateFlow<PowerInfo?>(null)
+
+    // Board power from INFO; null until loadPower() has read it, or if the value is not understood.
+    val power: StateFlow<PowerInfo?> = _power.asStateFlow()
 
     // How long open() spent in connect and in the steps after it, for timing logs.
     var connectMs = 0L
@@ -39,6 +46,7 @@ class DoorLink(context: Context, device: BluetoothDevice) {
                 DoorProtocol.CHALLENGE_UUID ->
                     if (value.size == DoorProtocol.NONCE_LENGTH) nonce.value = NonceState.Fresh(value)
                 DoorProtocol.STATUS_UUID -> statuses.trySend(value)
+                DoorProtocol.INFO_UUID -> _power.value = PowerInfo.parse(value)
             }
         }
 
@@ -75,6 +83,15 @@ class DoorLink(context: Context, device: BluetoothDevice) {
         // A notify that arrived meanwhile is newer than the read; keep it.
         nonce.compareAndSet(NonceState.None, NonceState.Fresh(value))
         setupMs = SystemClock.elapsedRealtime() - connectedAt
+    }
+
+    // notify INFO -> read INFO. Separate from open() so the buttons work without waiting for it;
+    // a command sent meanwhile queues behind these two operations (a few tens of ms).
+    suspend fun loadPower() {
+        gatt.enableNotifications(DoorProtocol.SERVICE_UUID, DoorProtocol.INFO_UUID)
+        val value = gatt.read(DoorProtocol.SERVICE_UUID, DoorProtocol.INFO_UUID)
+        // A notify that arrived meanwhile is newer than the read; keep it.
+        _power.compareAndSet(null, PowerInfo.parse(value))
     }
 
     // Waits for a nonce no frame has used yet and marks it used.

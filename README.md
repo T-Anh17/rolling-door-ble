@@ -6,7 +6,7 @@ An ESP32-S3 sits near the door and replays the fixed codes of the original RF re
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only). The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Next is phase 4: under 1 second from launch to ready. See [Roadmap](#roadmap).
+> **Status:** phase 3 done. The firmware pairs phones by QR code and authenticates every command; RF is still a fake layer (serial log only). The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a four-button screen. Phase 4 in progress: the app shows a power outage from `INFO` (fake values for now); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
 
 > **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
@@ -84,7 +84,7 @@ One custom GATT service with five characteristics. The device advertises as `Rol
 | `CHALLENGE` | `a7930002-966e-4240-b881-5c2e2f2203a8` | read, notify | 16-byte random nonce, replaced after every command and pairing request |
 | `COMMAND` | `a7930003-966e-4240-b881-5c2e2f2203a8` | write | `[key id][command][args 0–16 bytes][mac 16 bytes]` |
 | `STATUS` | `a7930004-966e-4240-b881-5c2e2f2203a8` | notify | `[command][result]`; `80` as the command means a pairing request |
-| `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[power source][battery percent]` |
+| `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[power source: 00 mains, 01 battery][battery percent: 0–100, FF not measured]`, notified when it changes |
 | `PAIRING` | `a7930006-966e-4240-b881-5c2e2f2203a8` | read, write | Key exchange, see [Pairing](#pairing) |
 
 `mac = HMAC-SHA256(phone key, nonce ‖ command ‖ args)`, first 16 bytes. The nonce changes after every frame, accepted or not, so a captured frame cannot be replayed.
@@ -141,7 +141,7 @@ Requires [PlatformIO](https://platformio.org/). From `firmware_esp/rolling-door-
 pio run -t upload && pio device monitor
 ```
 
-The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds) and `wipe` (erase all phone keys).
+The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) and `power mains|battery [0-100]` (set the fake power status in `INFO` until phase 6 measures it).
 
 ### Android app
 

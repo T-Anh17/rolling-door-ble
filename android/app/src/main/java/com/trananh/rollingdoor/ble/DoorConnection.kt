@@ -16,9 +16,11 @@ import com.trananh.rollingdoor.protocol.Command
 import com.trananh.rollingdoor.protocol.CommandFrame
 import com.trananh.rollingdoor.protocol.CommandResult
 import com.trananh.rollingdoor.protocol.DoorProtocol
+import com.trananh.rollingdoor.protocol.PowerInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,6 +62,10 @@ class DoorConnection(
 ) {
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
+
+    // Board power while Ready or Busy; null while not connected or not read yet.
+    private val _power = MutableStateFlow<PowerInfo?>(null)
+    val power: StateFlow<PowerInfo?> = _power.asStateFlow()
 
     private val sendMutex = Mutex()
     private var started = false
@@ -144,6 +150,7 @@ class DoorConnection(
         loopJob?.cancel()
         loopJob = null
         link = null
+        _power.value = null
     }
 
     // Ends only with an error the waiting connection cannot fix (no permission, wrong device
@@ -167,9 +174,12 @@ class DoorConnection(
                     link = opened
                     _state.value = ConnectionState.Ready
                     if (logTiming) logReady(opened, attemptAt, waited)
-                    opened.awaitDown()
+                    watchPower(opened)
                 } finally {
-                    if (link === opened) link = null
+                    if (link === opened) {
+                        link = null
+                        _power.value = null
+                    }
                     opened.close()
                 }
             }
@@ -180,6 +190,19 @@ class DoorConnection(
                 ConnectionState.Error(e.error)
             }
         }
+    }
+
+    // Reads INFO once Ready, then mirrors its notifications until the link is down.
+    private suspend fun watchPower(opened: DoorLink) = coroutineScope {
+        val mirror = launch { opened.power.collect { _power.value = it } }
+        try {
+            opened.loadPower()
+        } catch (e: BleException) {
+            // Power stays unknown and the screen shows no power status. If the link was lost,
+            // awaitDown() returns right away.
+        }
+        opened.awaitDown()
+        mirror.cancel()
     }
 
     // Filter logcat by tag DoorTiming. "since start" counts from start(), so it includes the

@@ -74,10 +74,13 @@
     <string name="control_status_out_of_range">Ngoài vùng</string>
     <string name="control_status_bluetooth_off">Bluetooth đang tắt</string>
     <string name="control_status_failed">Không kết nối được</string>
+    <string name="control_status_power_out">Mất điện</string>
     <string name="control_retry_now">Thử lại ngay</string>
     <string name="control_hint_out_of_range">Sẽ tự kết nối khi bạn lại gần cửa.</string>
     <string name="control_hint_failed">Kiểm tra thiết bị có điện rồi thử lại.</string>
     <string name="control_hint_unsupported">Firmware thiết bị không khớp với ứng dụng.</string>
+    <string name="control_hint_power_out">Cửa không chạy được khi mất điện.</string>
+    <string name="control_hint_power_out_battery">Cửa không chạy được khi mất điện. Pin thiết bị còn %1$d%%.</string>
     <string name="control_message_pairing_opened">Đã mở ghép đôi trong 60 giây. Quét mã QR trên máy mới để kết nối.</string>
     <string name="control_message_no_reply">Cửa không phản hồi. Hãy kiểm tra lại cửa trước khi thử lại.</string>
     <string name="control_message_key_rejected">Thiết bị không nhận máy này nữa. Hãy ghép đôi lại.</string>

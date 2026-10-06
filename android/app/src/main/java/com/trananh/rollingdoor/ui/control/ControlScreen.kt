@@ -38,6 +38,8 @@ import com.trananh.rollingdoor.ble.ConnectionState
 import com.trananh.rollingdoor.ble.LinkError
 import com.trananh.rollingdoor.data.SavedDevice
 import com.trananh.rollingdoor.protocol.Command
+import com.trananh.rollingdoor.protocol.PowerInfo
+import com.trananh.rollingdoor.protocol.PowerSource
 import com.trananh.rollingdoor.ui.components.BannerHost
 import com.trananh.rollingdoor.ui.components.BannerKind
 import com.trananh.rollingdoor.ui.components.BannerMessage
@@ -125,7 +127,7 @@ private fun ControlContent(
                 GateContent(gate)
             }
         } else {
-            ConnectionStatus(state.connection, onRetry)
+            ConnectionStatus(state.connection, state.power, onRetry)
             Column(
                 Modifier.fillMaxWidth().weight(1f),
                 verticalArrangement = Arrangement.spacedBy(DoorTheme.spacing.s),
@@ -146,38 +148,49 @@ private fun ControlContent(
 
 // The pill, "Try now" while out of range or failed, and a line saying what happens next.
 // With large text "Try now" moves below the pill instead of squeezing it.
+// Connected on battery means a power cut: the board is up but the door cannot move.
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ConnectionStatus(connection: ConnectionState, onRetry: () -> Unit) {
-    val (text, tone) = when (connection) {
-        ConnectionState.Idle, ConnectionState.Connecting -> R.string.control_status_connecting to StatusTone.Pending
-        ConnectionState.WaitingInRange -> R.string.control_status_out_of_range to StatusTone.Pending
-        ConnectionState.Ready, ConnectionState.Busy -> R.string.control_status_ready to StatusTone.Ready
-        ConnectionState.BluetoothOff -> R.string.control_status_bluetooth_off to StatusTone.Problem
-        is ConnectionState.Error -> R.string.control_status_failed to StatusTone.Problem
+private fun ConnectionStatus(connection: ConnectionState, power: PowerInfo?, onRetry: () -> Unit) {
+    val connected = connection == ConnectionState.Ready || connection == ConnectionState.Busy
+    val powerOut = connected && power?.onBattery == true
+    val (text, tone) = if (powerOut) {
+        R.string.control_status_power_out to StatusTone.Problem
+    } else {
+        when (connection) {
+            ConnectionState.Idle, ConnectionState.Connecting -> R.string.control_status_connecting to StatusTone.Pending
+            ConnectionState.WaitingInRange -> R.string.control_status_out_of_range to StatusTone.Pending
+            ConnectionState.Ready, ConnectionState.Busy -> R.string.control_status_ready to StatusTone.Ready
+            ConnectionState.BluetoothOff -> R.string.control_status_bluetooth_off to StatusTone.Problem
+            is ConnectionState.Error -> R.string.control_status_failed to StatusTone.Problem
+        }
     }
+    val canRetry = connection == ConnectionState.WaitingInRange || connection is ConnectionState.Error
     val hint = when {
-        connection == ConnectionState.WaitingInRange -> R.string.control_hint_out_of_range
+        powerOut -> power?.batteryPercent
+            ?.let { stringResource(R.string.control_hint_power_out_battery, it) }
+            ?: stringResource(R.string.control_hint_power_out)
+        connection == ConnectionState.WaitingInRange -> stringResource(R.string.control_hint_out_of_range)
         connection is ConnectionState.Error && connection.error == LinkError.Unsupported ->
-            R.string.control_hint_unsupported
-        connection is ConnectionState.Error -> R.string.control_hint_failed
+            stringResource(R.string.control_hint_unsupported)
+        connection is ConnectionState.Error -> stringResource(R.string.control_hint_failed)
         else -> null
     }
     Column(verticalArrangement = Arrangement.spacedBy(DoorTheme.spacing.xxs)) {
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             StatusPill(stringResource(text), tone, Modifier.align(Alignment.CenterVertically))
-            if (hint != null) {
+            if (canRetry) {
                 TextLink(stringResource(R.string.control_retry_now), onRetry, Modifier.align(Alignment.CenterVertically))
             }
         }
         if (hint != null) {
-            Text(stringResource(hint), style = DoorTheme.type.footnote, color = DoorTheme.colors.secondaryLabel)
+            Text(hint, style = DoorTheme.type.footnote, color = DoorTheme.colors.secondaryLabel)
         }
     }
 }
 
-// Skeleton while connecting, dimmed while not connected. While a command is in flight its button
-// shows a spinner and the others are dimmed.
+// Skeleton while connecting, dimmed while not connected or during a power cut. While a command is
+// in flight its button shows a spinner and the others are dimmed.
 @Composable
 private fun RemoteButton(command: Command, state: ControlUiState, onSend: (Command) -> Unit, modifier: Modifier) {
     val colors = DoorTheme.colors
@@ -190,6 +203,7 @@ private fun RemoteButton(command: Command, state: ControlUiState, onSend: (Comma
         else -> error("not a remote button: $command")
     }
     val connected = state.connection == ConnectionState.Ready || state.connection == ConnectionState.Busy
+    val powerOut = state.power?.onBattery == true
     DoorButton(
         label = stringResource(label),
         icon = icon,
@@ -200,7 +214,7 @@ private fun RemoteButton(command: Command, state: ControlUiState, onSend: (Comma
         },
         modifier = modifier.fillMaxHeight(),
         tall = command == Command.Up || command == Command.Down,
-        enabled = connected && (state.sending == null || state.sending == command),
+        enabled = connected && !powerOut && (state.sending == null || state.sending == command),
         sending = state.sending == command,
         placeholder = state.connection == ConnectionState.Idle || state.connection == ConnectionState.Connecting,
     )
@@ -261,6 +275,11 @@ private fun ControlConnectingPreview() = ControlPreview(ControlUiState(Connectio
 @DoorPreviews
 @Composable
 private fun ControlOutOfRangePreview() = ControlPreview(ControlUiState(ConnectionState.WaitingInRange))
+
+@DoorPreviews
+@Composable
+private fun ControlPowerOutPreview() =
+    ControlPreview(ControlUiState(ConnectionState.Ready, power = PowerInfo(PowerSource.Battery, 80)))
 
 @DoorPreviews
 @Composable
