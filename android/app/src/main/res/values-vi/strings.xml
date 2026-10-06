@@ -95,8 +95,7 @@
     <string name="settings_section_device">Thiết bị</string>
     <string name="settings_address">Địa chỉ</string>
     <string name="settings_role">Vai trò</string>
-    <string name="settings_role_admin">Quản trị</string>
-    <string name="settings_role_normal">Thường</string>
+    <string name="settings_role_admin">Quản trị viên</string>
     <string name="settings_section_admin">Quản trị</string>
     <string name="settings_add_phone">Thêm điện thoại</string>
     <string name="settings_add_phone_footer">Mở ghép đôi trong 60 giây. Hãy dùng máy mới quét mã QR trong thời gian này.</string>

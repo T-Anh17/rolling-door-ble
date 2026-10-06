@@ -96,7 +96,6 @@
     <string name="settings_address">Address</string>
     <string name="settings_role">Role</string>
     <string name="settings_role_admin">Admin</string>
-    <string name="settings_role_normal">Member</string>
     <string name="settings_section_admin">Admin</string>
     <string name="settings_add_phone">Add phone</string>
     <string name="settings_add_phone_footer">Opens pairing for 60 seconds. Scan the QR code on the new phone within that time.</string>

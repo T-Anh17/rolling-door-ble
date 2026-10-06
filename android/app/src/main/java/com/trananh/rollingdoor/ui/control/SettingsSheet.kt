@@ -81,12 +81,11 @@ private fun SettingsGroups(
 ) {
     val address = stringResource(R.string.settings_address)
     val role = stringResource(R.string.settings_role)
-    val roleValue = stringResource(
-        if (device.role == Role.Admin) R.string.settings_role_admin else R.string.settings_role_normal,
-    )
+    val admin = stringResource(R.string.settings_role_admin)
+    // Only the admin phone shows its role; a normal phone has nothing to act on.
     ListGroup(header = stringResource(R.string.settings_section_device)) {
         row(address, value = device.mac)
-        row(role, value = roleValue)
+        if (device.role == Role.Admin) row(role, value = admin)
     }
     if (device.role == Role.Admin) {
         val addPhone = stringResource(R.string.settings_add_phone)
