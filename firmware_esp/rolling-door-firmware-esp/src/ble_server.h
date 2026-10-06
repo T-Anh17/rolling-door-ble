@@ -37,6 +37,9 @@ void rotateChallenge();
 // Notifies STATUS with [command][result].
 void notifyStatus(uint8_t command, Result result);
 
+// Sets INFO to [power source][battery percent] and notifies it.
+void setInfo(uint8_t powerSource, uint8_t batteryPercent);
+
 // Value returned by reads of PAIRING.
 void setPairingResponse(const uint8_t* data, size_t length);
 void clearPairingResponse();

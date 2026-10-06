@@ -7,12 +7,24 @@
 #include "device_secret.h"
 #include "key_store.h"
 #include "pairing.h"
+#include "power.h"
 #include "protocol.h"
 #include "rf.h"
 
 namespace {
 
 bool pairingAdvertised = false;
+power::Status reportedPower = {power::Source::Mains, power::kBatteryUnknown};
+
+// Notifies INFO whenever the power status changes. A phone that connects later reads it.
+void updatePower(bool force = false) {
+  const power::Status status = power::read();
+  if (!force && status == reportedPower) {
+    return;
+  }
+  reportedPower = status;
+  ble::setInfo(static_cast<uint8_t>(status.source), status.batteryPercent);
+}
 
 void wipeAndRestart() {
   key_store::wipe();
@@ -128,8 +140,10 @@ void setup() {
   device_secret::begin();
   key_store::begin();
   rf::begin();
+  power::begin();
   buttons::begin();
   ble::begin();
+  updatePower(true);
 
   if (key_store::count() == 0) {
     Serial.println("[PAIR] no phone paired yet: pairing stays open until the first phone pairs");
@@ -159,6 +173,8 @@ void loop() {
     case console::Action::None:
       break;
   }
+
+  updatePower();
 
   const bool open = pairing::isOpen();
   if (open != pairingAdvertised) {

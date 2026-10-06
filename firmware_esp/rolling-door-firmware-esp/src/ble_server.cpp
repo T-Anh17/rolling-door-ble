@@ -14,6 +14,7 @@ QueueHandle_t eventQueue = nullptr;
 NimBLEServer* server = nullptr;
 NimBLECharacteristic* challengeChar = nullptr;
 NimBLECharacteristic* statusChar = nullptr;
+NimBLECharacteristic* infoChar = nullptr;
 NimBLECharacteristic* pairingChar = nullptr;
 uint8_t currentNonce[config::kNonceLength];
 
@@ -121,9 +122,9 @@ void begin() {
   statusChar = service->createCharacteristic(config::kStatusUuid, NIMBLE_PROPERTY::NOTIFY);
 
   // [power source: 0 = mains, 1 = battery][battery percent: 0xFF = not measured]
-  // Static until phase 4 (fake values) and phase 6 (real measurements).
-  NimBLECharacteristic* infoChar = service->createCharacteristic(
-      config::kInfoUuid, NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  // main.cpp keeps it up to date with setInfo().
+  infoChar = service->createCharacteristic(config::kInfoUuid,
+                                           NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
   const uint8_t info[] = {0x00, 0xFF};
   infoChar->setValue(info, sizeof(info));
 
@@ -166,6 +167,12 @@ void notifyStatus(uint8_t command, Result result) {
   const uint8_t status[] = {command, static_cast<uint8_t>(result)};
   statusChar->setValue(status, sizeof(status));
   statusChar->notify();
+}
+
+void setInfo(uint8_t powerSource, uint8_t batteryPercent) {
+  const uint8_t info[] = {powerSource, batteryPercent};
+  infoChar->setValue(info, sizeof(info));
+  infoChar->notify();
 }
 
 void setPairingResponse(const uint8_t* data, size_t length) {
