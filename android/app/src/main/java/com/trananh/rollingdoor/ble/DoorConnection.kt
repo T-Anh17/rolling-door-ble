@@ -220,7 +220,8 @@ class DoorConnection(
         Log.d(
             TIMING_TAG,
             "ready ${now - from} ms $since: connect ${opened.connectMs} ms, " +
-                "setup ${opened.setupMs} ms" + if (waited) ", after waiting in range" else "",
+                "setup ${opened.setupMs} ms" + (if (waited) ", after waiting in range" else "") +
+                " (steps: ${opened.steps})",
         )
     }
 

@@ -40,6 +40,10 @@ class DoorLink(context: Context, device: BluetoothDevice) {
     var setupMs = 0L
         private set
 
+    // Per step "name wait+resume": ms until the callback arrived, then ms until open() went on.
+    var steps = ""
+        private set
+
     private val gatt = GattClient(context, device, object : GattClient.Listener {
         override fun onNotification(uuid: UUID, value: ByteArray) {
             when (uuid) {
@@ -64,25 +68,33 @@ class DoorLink(context: Context, device: BluetoothDevice) {
         connectTimeoutMs: Long? = DIRECT_CONNECT_TIMEOUT_MS,
         largeMtu: Boolean = false,
     ) {
+        val timings = mutableListOf<String>()
         val startedAt = SystemClock.elapsedRealtime()
-        gatt.connect(autoConnect, connectTimeoutMs)
+        timed(timings, "connect") { gatt.connect(autoConnect, connectTimeoutMs) }
         val connectedAt = SystemClock.elapsedRealtime()
         connectMs = connectedAt - startedAt
         // Android shortens the interval for discovery by itself, then drops back to ~49 ms; this
         // keeps it short while the link is up (only while the app is on screen), so a command's
         // write and STATUS notify take a few ms instead of a couple of ~49 ms events.
         gatt.requestHighPriority()
-        if (largeMtu) gatt.requestMtu(MTU)
-        gatt.discoverServices()
-        gatt.enableNotifications(DoorProtocol.SERVICE_UUID, DoorProtocol.CHALLENGE_UUID)
-        gatt.enableNotifications(DoorProtocol.SERVICE_UUID, DoorProtocol.STATUS_UUID)
-        val value = gatt.read(DoorProtocol.SERVICE_UUID, DoorProtocol.CHALLENGE_UUID)
+        if (largeMtu) timed(timings, "mtu") { gatt.requestMtu(MTU) }
+        timed(timings, "discover") { gatt.discoverServices() }
+        timed(timings, "notify challenge") {
+            gatt.enableNotifications(DoorProtocol.SERVICE_UUID, DoorProtocol.CHALLENGE_UUID)
+        }
+        timed(timings, "notify status") {
+            gatt.enableNotifications(DoorProtocol.SERVICE_UUID, DoorProtocol.STATUS_UUID)
+        }
+        val value = timed(timings, "read challenge") {
+            gatt.read(DoorProtocol.SERVICE_UUID, DoorProtocol.CHALLENGE_UUID)
+        }
         if (value.size != DoorProtocol.NONCE_LENGTH) {
             throw BleException(LinkError.Unsupported, "CHALLENGE is ${value.size} bytes")
         }
         // A notify that arrived meanwhile is newer than the read; keep it.
         nonce.compareAndSet(NonceState.None, NonceState.Fresh(value))
         setupMs = SystemClock.elapsedRealtime() - connectedAt
+        steps = timings.joinToString()
     }
 
     // notify INFO -> read INFO. Separate from open() so the buttons work without waiting for it;
@@ -128,6 +140,15 @@ class DoorLink(context: Context, device: BluetoothDevice) {
     fun close() {
         markLost()
         gatt.close()
+    }
+
+    private inline fun <T> timed(timings: MutableList<String>, name: String, block: () -> T): T {
+        val startedAt = SystemClock.elapsedRealtime()
+        val result = block()
+        val resumedAt = SystemClock.elapsedRealtime()
+        val callbackAt = gatt.lastCallbackAt
+        timings += "$name ${callbackAt - startedAt}+${resumedAt - callbackAt}"
+        return result
     }
 
     private fun markLost() {

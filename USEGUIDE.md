@@ -124,6 +124,7 @@ Giai đoạn 4, đã làm:
 - `INFO` báo nguồn: firmware notify khi giá trị đổi, giá trị giả đặt bằng lệnh serial `power mains|battery [0-100]`. App đọc `INFO` ngay sau khi sẵn sàng, nên không làm chậm lúc bấm được. Khi board chạy pin, app hiện "Mất điện" kèm phần trăm pin và làm mờ bốn nút. Đã chạy thử trên máy thật: đổi nguồn qua serial thì app đổi theo ngay, mở app lúc board đang chạy pin thì hiện đúng.
 - App gọi `connect()` ngay khi đọc xong thiết bị đã lưu, không chờ màn điều khiển vẽ xong. `MainActivity` lấy cùng `ControlViewModel` với màn điều khiển (theo key) và gọi `start()` sớm; màn điều khiển vẫn tự gọi `start()` khi người dùng vừa cấp quyền hay bật Bluetooth trên màn hình.
 - Đọc thiết bị đã lưu một lần ngay khi tạo `RootViewModel` trong `onCreate`, chặn main 40–80 ms (lúc splash của hệ thống còn che), nên `connect()` được gọi ngay trong `onStart`, trước lần vẽ đầu. Bỏ trạng thái Loading và điều kiện giữ splash. Đọc bất đồng bộ thì DataStore xong sau 30–55 ms nhưng kết quả phải chờ main vẽ xong khoảng 170 ms; Keystore chỉ mất khoảng 5 ms.
+- Log `DoorTiming` ghi từng bước của kết nối và setup dạng `chờ+chạy tiếp`: thời gian chờ callback Bluetooth, rồi thời gian từ lúc callback về tới lúc coroutine chạy tiếp trên main.
 
 Giai đoạn 4, số đo sau khi bỏ MTU (cùng tablet, force-stop rồi mở lại, 10 lần): từ `start()` tới sẵn sàng 1,06 đến 1,28 giây; kết nối 0,47 đến 0,59 giây; setup 0,51 đến 0,75 giây. Tính từ lúc chạm icon thì khoảng 1,6 đến 1,9 giây, vì bản release mất 0,58 đến 0,77 giây từ lúc tạo process tới lúc gọi `connect()` (bản debug chậm gấp khoảng 5 lần, không dùng để đo đoạn này). Setup lâu hơn trước vì Android discover lại toàn bộ dịch vụ mỗi lần (ESP32-S3 là Bluetooth 5.0, Android không dùng cache) và mấy bước discover đầu chạy ở chu kỳ kết nối chậm.
 
@@ -131,12 +132,14 @@ Giai đoạn 4, số đo sau khi gọi `connect()` sớm (cùng tablet, bản re
 
 Giai đoạn 4, số đo sau khi đọc thiết bị đã lưu ngay trong `onCreate` (cùng cách đo, 8 lần mỗi bản): từ lúc tạo process tới `connect()` còn 403–484 ms, trước là 590–773 ms. Màn hình hiện ra muộn hơn khoảng 50 ms (902–987 ms, trước 870–919 ms). Bản có log: đọc 41–77 ms, `start()` ở +320–359 ms, sẵn sàng ở khoảng +1,30 đến +1,45 giây sau khi tạo process, trước là khoảng +1,45 đến +1,70 giây. Kết nối giờ chạy cùng lúc với lần vẽ đầu: 3 trong 8 lần, có kết nối rồi app còn chờ main thêm 256–305 ms.
 
+Giai đoạn 4, số đo từng bước (bản release có log, 8 lần): connect chờ 140–626 ms, rồi chờ main thêm 18–305 ms (5 trong 8 lần trên 139 ms, vì main đang vẽ màn đầu). Discover chờ 359–624 ms, là bước lâu nhất. Bật notify CHALLENGE, bật notify STATUS và đọc CHALLENGE mỗi bước chờ 19–38 ms. Sau discover, phần chờ main chỉ 3–31 ms mỗi bước. Từ `start()` tới sẵn sàng 938–1453 ms.
+
 Cách đo: app cài bằng `adb install` chạy chưa biên dịch (`run-from-apk`), chậm gấp khoảng 3 lần. Trước khi đo phải chạy `adb shell cmd package compile -m speed -f com.trananh.rollingdoor`, rồi bỏ lần mở đầu tiên. Bản release không có log `DoorTiming`, nên đo bằng log hệ thống: `Start proc` của `ActivityManager` và `connect()`, `onClientConnectionState()` của `BluetoothGatt`.
 
 Việc còn lại, làm cuối giai đoạn 4:
 
-- Kết nối giờ trùng lúc vẽ màn đầu. Các bước sau khi có kết nối (setup, đọc CHALLENGE) chạy tiếp trên main, nên có lần phải chờ khoảng 0,3 giây. Có thể chuyển phần GATT ra khỏi main, nhưng cần cân nhắc vì `DoorConnection` đang giả định mọi thứ chạy trên main.
-- ESP xin chu kỳ kết nối ngắn ngay khi vừa kết nối, để discover chạy nhanh từ bước đầu. Setup giờ là đoạn lâu nhất.
+- Có kết nối rồi còn chờ main vẽ màn đầu, thường khoảng 0,27 giây. Hướng sửa dự kiến: chạy `DoorLink.open()` trên một dispatcher nền. `GattClient` và `DoorLink` đã an toàn khi gọi từ luồng khác, chỉ phần trạng thái của `DoorConnection` mới cần ở lại main.
+- Discover mất 0,36–0,62 giây, là bước lâu nhất. Việc này nằm phía radio và firmware: ESP xin chu kỳ kết nối ngắn ngay khi vừa kết nối, và xem có bớt được service, characteristic trong bảng GATT không (Android discover lại toàn bộ mỗi lần vì không bond nên không cache).
 - Kết nối dao động 0,13–0,58 giây không phải do chu kỳ quảng bá: board đã quảng bá 20–30 ms (nhánh `esp32`, commit `a82a387`) mà số đo không đổi. Cần xem thông số kết nối phía Android (HCI snoop log).
 
 Giai đoạn 7, lỗ hổng cần sửa: "Quên thiết bị" hiện chỉ xóa khóa trên điện thoại, ô khóa vẫn nằm trong bảng của board. Lệnh `07` không cho admin tự thu hồi mình, nên admin quên thiết bị thì board không còn ai có quyền admin, và muốn lấy lại phải giữ KEY 10 giây, xóa sạch khóa của mọi máy. Cách sửa: khi quên thiết bị, app gửi lệnh mới nhờ board xóa ô của chính nó. Những điểm cần quyết khi thiết kế:
