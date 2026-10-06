@@ -26,11 +26,10 @@ class MainActivity : ComponentActivity() {
     private val rootViewModel: RootViewModel by viewModels { RootViewModel.Factory }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splash = installSplashScreen()
+        installSplashScreen()
         super.onCreate(savedInstanceState)
-        // Until the saved device is read (tens of ms), so the wrong screen never flashes.
-        splash.setKeepOnScreenCondition { rootViewModel.state.value == RootState.Loading }
         enableEdgeToEdge()
+        // Creating the ViewModel reads the saved device, so the connection can start in onStart.
         connectEarly()
         val adapter = (application as RollingDoorApp).container.bluetoothAdapter
         setContent {
@@ -41,13 +40,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // Starts the control screen's connection as soon as the saved device is read, instead of
-    // after the screen's first frame. Without the permission the screen's gate asks for it and
-    // starts the connection itself once granted.
+    // Starts the control screen's connection in onStart, before the screen's first frame.
+    // Without the permission the screen's gate asks for it and starts the connection itself
+    // once granted.
     private fun connectEarly() {
+        val rootState = rootViewModel.state
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                rootViewModel.state.collectLatest { state ->
+                rootState.collectLatest { state ->
                     if (state !is RootState.Paired || !canConnectToSavedDevice()) return@collectLatest
                     val control = ViewModelProvider(this@MainActivity, ControlViewModel.factory(state.device))[
                         ControlViewModel.key(state.device), ControlViewModel::class.java,

@@ -22,35 +22,44 @@ import com.trananh.rollingdoor.ui.pairing.PairingScreen
 import com.trananh.rollingdoor.ui.theme.DoorMotion
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 sealed interface RootState {
-    data object Loading : RootState // the splash screen stays up
     data object NotPaired : RootState
     data class Paired(val device: SavedDevice) : RootState
 }
 
-// logTiming: debug builds log how long the startup check takes (tag DoorTiming), since the
+// logTiming: debug builds log how long the startup read takes (tag DoorTiming), since the
 // connection only starts after it.
 class RootViewModel(
     private val repository: DeviceRepository,
-    private val logTiming: Boolean,
+    logTiming: Boolean,
 ) : ViewModel() {
-    val state: StateFlow<RootState> = flow {
+    // Read once while blocking the main thread (~50 ms, under the system splash), so the saved
+    // device is known before setContent and the connection starts before the first frame. Read
+    // asynchronously, the result waits ~170 ms for the main thread to finish the first frame.
+    private val initial: RootState = runBlocking {
+        val readAt = SystemClock.elapsedRealtime()
         // A pairing that crashed before its confirming Ping leaves nothing usable: drop it.
-        val checkAt = SystemClock.elapsedRealtime()
         runCatching { repository.discardIncomplete() }
-        if (logTiming) Log.d("DoorTiming", "saved device checked in ${SystemClock.elapsedRealtime() - checkAt} ms")
-        emitAll(repository.device.map { if (it == null) RootState.NotPaired else RootState.Paired(it) })
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, RootState.Loading)
+        repository.device.first().toState().also {
+            if (logTiming) Log.d("DoorTiming", "saved device read in ${SystemClock.elapsedRealtime() - readAt} ms")
+        }
+    }
+
+    val state: StateFlow<RootState> =
+        repository.device.map { it.toState() }.stateIn(viewModelScope, SharingStarted.Eagerly, initial)
 
     fun forget() {
         viewModelScope.launch { repository.forget() }
     }
+
+    private fun SavedDevice?.toState(): RootState =
+        if (this == null) RootState.NotPaired else RootState.Paired(this)
 
     companion object {
         val Factory = viewModelFactory {
@@ -69,7 +78,6 @@ class RootViewModel(
 fun RootScreen(state: RootState, adapter: BluetoothAdapter?, onForget: () -> Unit) {
     Crossfade(targetState = state, animationSpec = DoorMotion.spring(), label = "root") { current ->
         when (current) {
-            RootState.Loading -> Unit
             RootState.NotPaired -> {
                 val gate = rememberBluetoothGate(adapter, forPairing = true)
                 if (gate.status == GateStatus.Ready) PairingScreen() else GateScreen(gate)
