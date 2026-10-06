@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode.scanning)
+    implementation(libs.zxing.core) // draws the invite QR code; scanning stays with ML Kit
     implementation(libs.haze)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

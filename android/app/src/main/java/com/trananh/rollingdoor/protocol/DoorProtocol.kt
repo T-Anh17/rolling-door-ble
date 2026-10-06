@@ -11,6 +11,7 @@ object DoorProtocol {
     val INFO_UUID: UUID = UUID.fromString("a7930005-966e-4240-b881-5c2e2f2203a8")
     val PAIRING_UUID: UUID = UUID.fromString("a7930006-966e-4240-b881-5c2e2f2203a8")
     val BUTTONS_UUID: UUID = UUID.fromString("a7930007-966e-4240-b881-5c2e2f2203a8")
+    val PHONES_UUID: UUID = UUID.fromString("a7930008-966e-4240-b881-5c2e2f2203a8")
 
     // Scan response manufacturer data while pairing is open: [company id 0xFFFF][0x01].
     const val MANUFACTURER_ID = 0xFFFF
@@ -38,7 +39,8 @@ object DoorProtocol {
     // STATUS notify is [command][result]; a PAIRING request reports this command code.
     const val STATUS_PAIRING: Byte = 0x80.toByte()
 
-    // A write longer than this needs a larger MTU than the default 23. Only SET_BUTTON is.
+    // A write longer than this needs a larger MTU than the default 23: SET_BUTTON and
+    // RENAME_PHONE with a long name.
     const val DEFAULT_MTU_PAYLOAD = 20
 
     // STATUS [81][result] when learning started by LearnRf ends: Ok saved, RfError not heard.
@@ -49,11 +51,17 @@ object DoorProtocol {
 enum class Command(val code: Byte) {
     Ping(0x00),
     OpenPairing(0x06),
+    RevokePhone(0x07), // admin, args: [key id], not its own
+    Leave(0x08), // removes this phone's own slot; an admin only as the last phone
     LearnRf(0x09), // admin, args: [button id] to learn, [LEARN_CANCEL] to stop
     ClearRf(0x0A), // admin, args: [button id]
     Press(0x0B), // args: [button id]
     SetButton(0x0C), // admin, args: see ButtonList.setArgs; adds the button or changes it
     DeleteButton(0x0D), // admin, args: [button id]; also clears its RF code
+    ListPhones(0x0E), // puts the phone list in PHONES, see PhoneList
+    RenamePhone(0x0F), // args: see PhoneList.renameArgs; the admin any phone, others their own
+    MakeAdmin(0x10), // admin, args: [key id]; this phone becomes a normal one
+    Invite(0x11), // admin, 8 digits for a new phone in PAIRING, see InviteCode
 }
 
 enum class CommandResult(val code: Byte) {

@@ -18,6 +18,8 @@ import com.trananh.rollingdoor.protocol.Command
 import com.trananh.rollingdoor.protocol.CommandFrame
 import com.trananh.rollingdoor.protocol.CommandResult
 import com.trananh.rollingdoor.protocol.DoorProtocol
+import com.trananh.rollingdoor.protocol.InviteCode
+import com.trananh.rollingdoor.protocol.PhoneList
 import com.trananh.rollingdoor.protocol.PowerInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,8 +54,8 @@ sealed interface ConnectionState {
 //                                  v
 //                           WaitingInRange (autoConnect = true, no timeout) -> Ready
 //
-// Connects by the saved MAC without scanning. Disconnecting in stop() also matters for other
-// phones: the ESP32 stops advertising while one phone holds the connection.
+// Connects by the saved MAC without scanning. The board takes a few phones at once and keeps
+// advertising while it has room; disconnecting in stop() still frees a place for another phone.
 //
 // scope must run on the main thread: start(), stop(), retryNow(), the Bluetooth receiver and the
 // connection loop all touch the same fields. Only opening a link (connect to the first CHALLENGE)
@@ -183,6 +185,23 @@ class DoorConnection(
     suspend fun awaitLearned(): CommandResult {
         val current = link ?: throw BleException(LinkError.Lost, "not connected")
         return current.awaitStatus(DoorProtocol.STATUS_RF_LEARNED, LEARN_TIMEOUT_MS)
+    }
+
+    // Reads PHONES, which the board fills after LIST_PHONES on this connection. null if the value
+    // is malformed. Throws BleException if the link fails.
+    suspend fun readPhones(): PhoneList? {
+        val current = link ?: throw BleException(LinkError.Lost, "not connected")
+        return PhoneList.parse(current.read(DoorProtocol.PHONES_UUID))
+    }
+
+    // Reads PAIRING after INVITE and unmasks the digits with this phone's key. null if the value
+    // is not an invite. Throws BleException if the link fails.
+    suspend fun readInvite(): String? {
+        val current = link ?: throw BleException(LinkError.Lost, "not connected")
+        val value = current.read(DoorProtocol.PAIRING_UUID)
+        val salt = InviteCode.salt(value) ?: return null
+        val mask = withContext(Dispatchers.Default) { signer.hmacSha256(InviteCode.maskMessage(salt)) }
+        return InviteCode.unmask(value, mask)
     }
 
     private fun startLoop() {

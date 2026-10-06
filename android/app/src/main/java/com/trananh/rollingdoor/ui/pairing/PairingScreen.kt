@@ -34,7 +34,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -197,13 +196,13 @@ private fun IdleActions(onScan: () -> Unit, onSubmitManual: (String) -> Boolean,
                 invalid = false
             },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = "RDOOR1:…",
+            placeholder = "1234 5678",
             error = if (invalid) stringResource(R.string.pairing_manual_invalid) else null,
             textStyle = DoorTheme.type.body.copy(fontFamily = FontFamily.Monospace),
+            // Digits are what people type; a pasted RDOOR1 code still goes in.
             keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Characters,
                 autoCorrectEnabled = false,
-                keyboardType = KeyboardType.Ascii,
+                keyboardType = KeyboardType.Number,
                 imeAction = ImeAction.Done,
             ),
             keyboardActions = KeyboardActions(onDone = { submit() }),
