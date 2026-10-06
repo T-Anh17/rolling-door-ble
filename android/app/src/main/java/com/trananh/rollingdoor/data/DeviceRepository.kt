@@ -60,6 +60,13 @@ class DeviceRepository(
         }
     }
 
+    // The role changes when an admin hands it over; the board's phone list says which it is.
+    suspend fun setRole(role: Role) {
+        dataStore.edit { prefs ->
+            if (prefs[MAC] != null) prefs[ROLE] = role.code.toInt()
+        }
+    }
+
     // Signs with the stored phone key, pending or confirmed.
     suspend fun signer(): CommandSigner? = withContext(Dispatchers.IO) { keyStore.signer() }
 
@@ -81,7 +88,8 @@ class DeviceRepository(
         }
     }
 
-    // Local only: the key slot on the ESP32 stays until an admin revokes it or the device is wiped.
+    // Local only: the caller first asks the board to free this phone's slot (LEAVE); without
+    // that, the slot stays until an admin revokes it or the device is wiped.
     suspend fun forget() {
         withContext(Dispatchers.IO) { keyStore.deleteKey() }
         dataStore.edit { it.clear() }

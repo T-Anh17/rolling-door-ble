@@ -1,14 +1,19 @@
 package com.trananh.rollingdoor.ble
 
 import android.content.Context
+import android.os.Build
+import android.provider.Settings
+import com.trananh.rollingdoor.crypto.CommandSigner
 import com.trananh.rollingdoor.crypto.PairingCrypto
 import com.trananh.rollingdoor.crypto.PairingException
 import com.trananh.rollingdoor.data.DeviceRepository
 import com.trananh.rollingdoor.data.SavedDevice
+import com.trananh.rollingdoor.protocol.ButtonList
 import com.trananh.rollingdoor.protocol.Command
 import com.trananh.rollingdoor.protocol.CommandFrame
 import com.trananh.rollingdoor.protocol.CommandResult
 import com.trananh.rollingdoor.protocol.DoorProtocol
+import com.trananh.rollingdoor.protocol.PhoneList
 import com.trananh.rollingdoor.protocol.SetupCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -58,6 +63,7 @@ class PairingSession(
         } ?: return PairingResult.Failure(PairingError.NotFound)
 
         onProgress(PairingProgress.Connecting(found.pairingOpen))
+        val mac = found.device.address
         val link = DoorLink(context, found.device)
         var saved = false
         var confirmed = false
@@ -77,8 +83,8 @@ class PairingSession(
             } catch (e: PairingException) {
                 return PairingResult.Failure(PairingError.InvalidResponse)
             }
-            val device = SavedDevice(code.mac, key.keyId, key.role)
-            repository.savePending(code.mac, key)
+            val device = SavedDevice(mac, key.keyId, key.role)
+            repository.savePending(mac, key)
             saved = true
 
             onProgress(PairingProgress.Confirming)
@@ -92,6 +98,7 @@ class PairingSession(
             }
             repository.confirm()
             confirmed = true
+            nameOnBoard(link, device.keyId, signer)
             return PairingResult.Success(device)
         } catch (e: BleException) {
             return PairingResult.Failure(e.toPairingError())
@@ -100,6 +107,28 @@ class PairingSession(
             if (saved && !confirmed) withContext(NonCancellable) { repository.forget() }
         }
     }
+
+    // Names the new slot after this phone (the name in Android's About phone), so the admin's
+    // phone list tells phones apart. Best effort: the pairing is already confirmed, and the
+    // admin can name the phone later.
+    private suspend fun nameOnBoard(link: DoorLink, keyId: Int, signer: CommandSigner) {
+        val name = ButtonList.fitName(deviceName()).trim()
+        if (name.isEmpty()) return
+        try {
+            val nonce = link.takeNonce()
+            val frame = withContext(Dispatchers.Default) {
+                CommandFrame.build(keyId, Command.RenamePhone, PhoneList.renameArgs(keyId, name), nonce, signer)
+            }
+            link.exchange(DoorProtocol.COMMAND_UUID, frame, Command.RenamePhone.code)
+        } catch (e: BleException) {
+            // Stays unnamed: the app shows "Phone <n>".
+        }
+    }
+
+    private fun deviceName(): String =
+        Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
+            ?.takeIf { it.isNotBlank() }
+            ?: Build.MODEL
 
     private fun BleException.toPairingError() = when (error) {
         LinkError.BluetoothOff -> PairingError.BluetoothOff

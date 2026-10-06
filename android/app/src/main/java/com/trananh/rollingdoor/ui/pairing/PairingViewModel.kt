@@ -10,6 +10,7 @@ import com.trananh.rollingdoor.ble.PairingError
 import com.trananh.rollingdoor.ble.PairingProgress
 import com.trananh.rollingdoor.ble.PairingResult
 import com.trananh.rollingdoor.ble.PairingSession
+import com.trananh.rollingdoor.protocol.InviteCode
 import com.trananh.rollingdoor.protocol.SetupCode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,10 +67,12 @@ class PairingViewModel(private val newSession: () -> PairingSession) : ViewModel
         }
     }
 
-    // Returns false if the text is not a setup code; the screen shows that under the field.
+    // The 8 digits of an admin's invite, or a pasted setup code. Returns false if the text is
+    // neither; the screen shows that under the field.
     fun submitManual(text: String): Boolean {
-        val parsed = SetupCode.parse(text) ?: return false
-        start(parsed)
+        val digits = InviteCode.normalize(text)
+        val parsed = if (digits != null) SetupCode(mac = null, InviteCode.secret(digits)) else SetupCode.parse(text)
+        start(parsed ?: return false)
         return true
     }
 

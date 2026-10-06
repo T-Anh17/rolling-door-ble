@@ -77,6 +77,22 @@ class DeviceRepositoryTest {
         assertEquals(SavedDevice(mac, 3, Role.Normal), repository.device.first())
     }
 
+    @Test
+    fun roleFollowsHandOver() = runTest {
+        repository.savePending(mac, PairedKey(3, Role.Normal, phoneKey.copyOf()))
+        repository.confirm()
+
+        repository.setRole(Role.Admin)
+
+        assertEquals(SavedDevice(mac, 3, Role.Admin), repository.device.first())
+    }
+
+    @Test
+    fun setRoleWithoutDeviceDoesNothing() = runTest {
+        repository.setRole(Role.Admin)
+        assertNull(repository.device.first())
+    }
+
     @Test(expected = IllegalStateException::class)
     fun confirmWithoutPendingFails() = runTest {
         repository.confirm()

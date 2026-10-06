@@ -62,7 +62,7 @@ import com.trananh.rollingdoor.ui.theme.RollingDoorTheme
 // one screen that never scrolls. Everything else (device info, admin actions, editing buttons,
 // Forget device) lives in Settings.
 @Composable
-fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onForget: () -> Unit) {
+fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?) {
     val viewModel: ControlViewModel = viewModel(
         key = ControlViewModel.key(device),
         factory = ControlViewModel.factory(device),
@@ -81,9 +81,16 @@ fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onForget: () 
     }
 
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    // The banner sits under the sheet: close the sheet when Add phone answers.
+    // The banner sits under the sheet: close the sheet when a command fails.
     LaunchedEffect(state.message) {
         if (state.message != null) settingsOpen = false
+    }
+    // Every phone reads the phone list when Settings opens: the admin to show it, any phone to
+    // learn whether the admin handed it over.
+    // Busy counts too: the list's own commands make the connection Busy for a moment.
+    val connected = state.connection == ConnectionState.Ready || state.connection == ConnectionState.Busy
+    LaunchedEffect(settingsOpen, connected) {
+        if (settingsOpen && connected) viewModel.loadPhones()
     }
 
     ControlContent(
@@ -99,8 +106,6 @@ fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onForget: () 
         SettingsSheet(
             device = device,
             canAddPhone = state.connection == ConnectionState.Ready && state.sending == null,
-            addingPhone = state.sending == Command.OpenPairing,
-            onAddPhone = viewModel::openPairing,
             buttons = ButtonActions(
                 state.buttons,
                 state.learned,
@@ -113,11 +118,22 @@ fun ControlScreen(device: SavedDevice, adapter: BluetoothAdapter?, onForget: () 
                 onCancelLearn = viewModel::cancelLearn,
                 onLeave = viewModel::clearResults,
             ),
-            onForget = onForget,
+            phones = PhoneActions(
+                state.phones,
+                state.invite,
+                state.leave,
+                onInvite = viewModel::invite,
+                onCloseInvite = { viewModel.closeInvite(reloadPhones = true) },
+                onRename = viewModel::renamePhone,
+                onRevoke = viewModel::revokePhone,
+                onMakeAdmin = viewModel::makeAdmin,
+                onLeave = viewModel::leave,
+                onForgetAnyway = viewModel::forgetAnyway,
+            ),
             onDismiss = {
                 // Closing the sheet mid-learning turns the board's receiver off.
                 viewModel.cancelLearn()
-                viewModel.clearResults()
+                viewModel.closeSettings()
                 settingsOpen = false
             },
         )
@@ -272,7 +288,6 @@ private fun rememberBanner(message: ControlMessage?, onOpenSettings: () -> Unit)
     val settings = stringResource(R.string.settings_title)
     return remember(message, text) {
         when (message) {
-            ControlMessage.PairingOpened -> BannerMessage(text, BannerKind.Success)
             // Stays up: the way out is Settings, then Forget device.
             ControlMessage.KeyRejected -> BannerMessage(
                 text,
@@ -288,7 +303,6 @@ private fun rememberBanner(message: ControlMessage?, onOpenSettings: () -> Unit)
 
 private val ControlMessage.text: Int
     get() = when (this) {
-        ControlMessage.PairingOpened -> R.string.control_message_pairing_opened
         ControlMessage.NoReply -> R.string.control_message_no_reply
         ControlMessage.KeyRejected -> R.string.control_message_key_rejected
         ControlMessage.LockedOut -> R.string.control_message_locked_out

@@ -25,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 sealed interface RootState {
@@ -54,10 +53,6 @@ class RootViewModel(
     val state: StateFlow<RootState> =
         repository.device.map { it.toState() }.stateIn(viewModelScope, SharingStarted.Eagerly, initial)
 
-    fun forget() {
-        viewModelScope.launch { repository.forget() }
-    }
-
     private fun SavedDevice?.toState(): RootState =
         if (this == null) RootState.NotPaired else RootState.Paired(this)
 
@@ -73,16 +68,17 @@ class RootViewModel(
 }
 
 // Paired phones go straight to the control screen; the first run goes through the
-// permission / Bluetooth gate, then pairing. Forgetting the device is the only way back.
+// permission / Bluetooth gate, then pairing. Forgetting the device (in Settings) is the only
+// way back.
 @Composable
-fun RootScreen(state: RootState, adapter: BluetoothAdapter?, onForget: () -> Unit) {
+fun RootScreen(state: RootState, adapter: BluetoothAdapter?) {
     Crossfade(targetState = state, animationSpec = DoorMotion.spring(), label = "root") { current ->
         when (current) {
             RootState.NotPaired -> {
                 val gate = rememberBluetoothGate(adapter, forPairing = true)
                 if (gate.status == GateStatus.Ready) PairingScreen() else GateScreen(gate)
             }
-            is RootState.Paired -> ControlScreen(current.device, adapter, onForget)
+            is RootState.Paired -> ControlScreen(current.device, adapter)
         }
     }
 }

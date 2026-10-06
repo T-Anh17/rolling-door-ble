@@ -15,19 +15,21 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
-// Pairing only: finds the device from the QR code. The control screen connects by MAC directly,
-// so daily use needs no scan (and no location permission on Android 11 and below).
+// Pairing only: finds the device from the QR code, or for typed invite digits, a device with
+// pairing open. The control screen connects by MAC directly, so daily use needs no scan (and no
+// location permission on Android 11 and below).
 @SuppressLint("MissingPermission")
 class DeviceScanner(private val adapter: BluetoothAdapter) {
     class Found(val device: BluetoothDevice, val pairingOpen: Boolean)
 
-    // Null if the device is not seen within timeoutMs.
-    suspend fun find(mac: String, timeoutMs: Long = SCAN_TIMEOUT_MS): Found? {
+    // Null if the device is not seen within timeoutMs. mac = null: the first device seen with
+    // pairing open (an admin's invite opens it); a device with pairing closed does not count.
+    suspend fun find(mac: String?, timeoutMs: Long = SCAN_TIMEOUT_MS): Found? {
         if (!adapter.isEnabled) throw BleException(LinkError.BluetoothOff)
         val scanner = adapter.bluetoothLeScanner ?: throw BleException(LinkError.BluetoothOff)
         val filter = ScanFilter.Builder()
             .setServiceUuid(ParcelUuid(DoorProtocol.SERVICE_UUID))
-            .setDeviceAddress(mac)
+            .apply { if (mac != null) setDeviceAddress(mac) }
             .build()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
@@ -63,7 +65,7 @@ class DeviceScanner(private val adapter: BluetoothAdapter) {
             results.first { result ->
                 val now = SystemClock.elapsedRealtime()
                 if (firstSeenAt == 0L) firstSeenAt = now
-                result.isPairingOpen() || now - firstSeenAt >= FLAG_GRACE_MS
+                result.isPairingOpen() || (mac != null && now - firstSeenAt >= FLAG_GRACE_MS)
             }
         } ?: return null
         return Found(result.device, result.isPairingOpen())

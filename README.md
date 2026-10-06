@@ -6,7 +6,7 @@ An ESP32-S3 sits near the door and replays the fixed codes of the original RF re
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** v0.0.1, phases 1–3 done. The firmware pairs phones by QR code and authenticates every command. The app pairs by scanning the QR code, connects on its own while it is open and controls the door from a screen of up to eight buttons. Real RF is in progress (phase 6): the admin adds, edits and deletes buttons and learns their codes from the original remote, and the board replays them with `rc-switch`. Phase 4 in progress: the app shows a power outage from `INFO` (fake values until mains detection is fitted); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
+> **Status:** phases 1–3 and 7 done. The firmware pairs phones by QR code or by an 8-digit invite from the admin phone, and authenticates every command; up to three phones can be connected at once, and the admin renames, revokes and hands over admin from the app. The app pairs by scanning the QR code or typing the invite, connects on its own while it is open and controls the door from a screen of up to eight buttons. Real RF is in progress (phase 6): the admin adds, edits and deletes buttons and learns their codes from the original remote, and the board replays them with `rc-switch`. Phase 4 in progress: the app shows a power outage from `INFO` (fake values until mains detection is fitted); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
 
 > **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
@@ -76,17 +76,20 @@ rolling-door-ble/
 
 ## BLE protocol
 
-One custom GATT service with five characteristics. The device advertises no name, only the service UUID in the advertising packet. While pairing is open, the scan response also carries manufacturer data `FF FF 01`.
+One custom GATT service with seven characteristics. The device advertises no name, only the service UUID in the advertising packet. While pairing is open, the scan response also carries manufacturer data `FF FF 01`.
+
+The device takes up to three phones at once and keeps advertising while it has room, so one phone with the app open does not lock the others out. Each connection has its own `CHALLENGE` nonce and gets the `STATUS` of its own commands; `PAIRING` and `PHONES` read differently per connection; `INFO` goes to all.
 
 | Characteristic | UUID | Properties | Payload |
 |---|---|---|---|
 | Service | `a7930001-966e-4240-b881-5c2e2f2203a8` | | |
-| `CHALLENGE` | `a7930002-966e-4240-b881-5c2e2f2203a8` | read, notify | 16-byte random nonce, replaced after every command and pairing request |
+| `CHALLENGE` | `a7930002-966e-4240-b881-5c2e2f2203a8` | read, notify | 16-byte random nonce for this connection, replaced after each of its commands and pairing requests |
 | `COMMAND` | `a7930003-966e-4240-b881-5c2e2f2203a8` | write | `[key id][command][args 0–34 bytes][mac 16 bytes]`; only `0C` is longer than the default MTU allows, and the app asks for a larger MTU before sending it |
 | `STATUS` | `a7930004-966e-4240-b881-5c2e2f2203a8` | notify | `[command][result]`; `80` as the command means a pairing request, `81` the end of RF learning |
 | `INFO` | `a7930005-966e-4240-b881-5c2e2f2203a8` | read, notify | `[power source: 00 mains, 01 battery][battery percent: 0–100, FF not measured][learned buttons: bit n = button n + 1][button list revision]`, notified when it changes |
 | `PAIRING` | `a7930006-966e-4240-b881-5c2e2f2203a8` | read, write | Key exchange, see [Pairing](#pairing) |
 | `BUTTONS` | `a7930007-966e-4240-b881-5c2e2f2203a8` | read | `[revision]` then, per button in display order, `[id 1–8][icon][name length 0–32][name UTF-8]` (a long read, up to 281 bytes) |
+| `PHONES` | `a7930008-966e-4240-b881-5c2e2f2203a8` | read | Empty until this connection sends `0E`, then `[count]` and, per phone by key id, `[key id][role: 01 admin, 00 normal][name length 0–32][name UTF-8]` (a long read, up to 281 bytes). Other connections read it empty |
 
 `mac = HMAC-SHA256(phone key, nonce ‖ command ‖ args)`, first 16 bytes. The nonce changes after every frame, accepted or not, so a captured frame cannot be replayed.
 
@@ -97,13 +100,18 @@ One custom GATT service with five characteristics. The device advertises no name
 | `05` | Enter OTA update mode (not implemented until phase 5) | Admin |
 | `06` | Open pairing for 60 seconds | Admin |
 | `07` | Revoke a phone, args: `[key id]` (an admin cannot revoke itself) | Admin |
+| `08` | Leave: removes the sending phone's own slot and name. The admin gets `04` while other phones are paired (it hands over admin first with `10`); as the last phone it may leave, and pairing opens again | Any paired phone |
 | `09` | Learn an RF code, args: `[01–08]` the button, or `[00]` to cancel. `00` means the receiver is listening, `03` that it is busy; the end comes later as `STATUS` `81 00` (saved) or `81 03` (no code within 15 s) | Admin |
 | `0A` | Clear an RF code, args: `[01–08]` the button (`03` while learning) | Admin |
 | `0B` | Press a button, args: `[01–08]`. `01` if there is no such button, `03` if it has no code or the receiver is busy | Any paired phone |
 | `0C` | Add a button or change it, args: `[id 01–08][icon][name UTF-8, 0–32 bytes]`. A new button goes at the end of the list | Admin |
 | `0D` | Delete a button and its RF code, args: `[01–08]` (`03` while learning) | Admin |
+| `0E` | List phones into `PHONES`. A phone also learns its own role from the list | Any paired phone |
+| `0F` | Name a phone, args: `[key id][name UTF-8, 0–32 bytes]`; empty clears it. The app names a new phone after the device right after pairing | Admin for any phone, others for themselves |
+| `10` | Make another phone the admin, args: `[key id]`. The sender becomes a normal phone | Admin |
+| `11` | Invite a phone: the device makes 8 digits for one new phone (see [Pairing](#pairing)) and puts them, masked, in `PAIRING` | Admin |
 
-`08` is reserved for phase 7. Learning stops when the admin phone disconnects or sends `09 00`; neither is reported with `81`.
+Learning stops when the admin phone disconnects or sends `09 00`; neither is reported with `81`.
 
 **Buttons.** The board keeps up to eight buttons in NVS, each with an id (1–8, also the slot of its RF code), an icon and a name. A new board starts with Up, Down, Lock and Unlock as buttons 1–4, with empty names. Icons are `00` Up, `01` Down, `02` Lock, `03` Unlock, `04` Stop, `05` Gate, `06` Garage, `07` Light, `08` Power, `09` Bell; the app draws them, and a button with an empty name shows its icon's name in the phone's language. Every change to the list (`0C`, `0D`) bumps the revision in `INFO`, which the board notifies before the command's `STATUS`. The app keeps the last list it read and reads `BUTTONS` again only when the revision differs, so the buttons show before it connects and the list costs nothing on a normal launch. Names are readable by anyone who connects, like `INFO`.
 
@@ -124,6 +132,7 @@ Pairing works like a camera: scan the device's QR code with the app. There is no
 
 - **QR code.** On first boot the ESP32 creates a random 16-byte setup secret and keeps it in NVS. The QR code holds `RDOOR1:<BLE MAC, 12 hex>:<secret, base32>`. Print it from the serial console (`qr`) and keep it somewhere safe, not on the box by the door.
 - **When pairing is open.** Always while no phone is paired. After that, for 60 seconds when BOOT (GPIO0) is held for 3 seconds, when the admin sends `06`, or with the `pair` console command.
+- **Invites.** The usual way to add a phone. The admin sends `11` and the device makes 8 random digits, valid once for 5 minutes; a new invite replaces the last one. The new phone types the digits, or scans the admin's screen, which shows them as a QR code in the same `RDOOR1` form. In the exchange below, `secret` is then `HMAC-SHA256(key = the 8 digits in ASCII, "RDINVITE")`, first 16 bytes. The admin reads `PAIRING` right after: `[02][salt, 16][digits XOR HMAC-SHA256(admin key, "RDINVITE" ‖ salt), first 8 bytes]`, so the digits never go over the air in clear. While an invite is valid the scan response carries the pairing flag, which is how a phone that typed the digits finds the device without its MAC. Guessing is bounded by the lockout: about 25 tries in 5 minutes against 100 million codes.
 - **Exchange.**
   1. The app reads `CHALLENGE` (nonce `N`) and creates an ephemeral P-256 key pair.
   2. It writes `[01][app public key, 65 bytes][tagA]` to `PAIRING`, where `tagA = HMAC-SHA256(secret, "RDPAIR-A" ‖ N ‖ app public key)`, first 16 bytes. This proves the app has the QR code.
@@ -135,7 +144,9 @@ Pairing works like a camera: scan the device's QR code with the app. There is no
 
 - Each phone has its own 32-byte key, in a table of 8 slots stored in NVS on the ESP32.
 - The first phone to pair becomes the admin; later phones are normal.
-- Only the admin can update firmware, configure WiFi, learn RF codes, and add or revoke phones.
+- Only the admin can update firmware, configure WiFi, learn RF codes, and add, rename or revoke phones. There is one admin at a time; it can hand the role to another phone (`10`).
+- Each phone has a name of up to 32 bytes, kept on the device. The app sets it to the phone's device name when it pairs; the admin can change it. An unnamed phone shows as "Phone <slot + 1>".
+- Forgetting the device in the app first asks the device to free this phone's slot (`08`). A normal phone out of range may still forget, and its slot stays until the admin revokes it. The admin can only forget while connected, and only as the last phone; otherwise it hands over admin first, so the device always has one.
 - Holding the second button (KEY / GPIO14) for 10 seconds erases all phone keys and restarts. The setup secret is kept, so the printed QR code stays valid, and pairing opens again for a new admin.
 
 ## Getting started
@@ -168,7 +179,7 @@ BLE does not work in the emulator; use a real device.
 
 The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.
 
-Once paired, the app opens straight on the control screen: the connection status and the buttons (two per row, up to eight, never scrolling), nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden, so another phone can connect. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Add phone**, **Add watch** (a placeholder until the Wear OS app exists) and **Buttons** for the admin, and **Forget device**, which removes the key from this phone only. Buttons lists the device's buttons and whether it has a code for each, with **Add button** while there are fewer than eight. A button's page sets its name and icon (**Save**), learns its code (tap **Learn code**, then hold the button on the remote close to the device, within 15 seconds; the receiver must be wired), clears the code, or deletes the button with its code. A new button is saved first, then learned. Every paired phone sees the same buttons. The phone's slot stays in the device's key table; if the admin forgets the device, no phone is left with admin rights until the keys are erased with KEY. Phase 7 fixes this with a command that lets a phone leave and free its own slot.
+Once paired, the app opens straight on the control screen: the connection status and the buttons (two per row, up to eight, never scrolling), nothing else. It connects by itself while it is on screen and disconnects as soon as it is closed or hidden. Up to three phones can be connected at once. Out of range, it waits and connects when the device comes back; **Try now** forces a direct attempt. The gear button opens Settings: the device address and this phone's role, **Phones**, **Add watch** (a placeholder until the Wear OS app exists) and **Buttons** for the admin, and **Forget device**. Phones lists the paired phones with **Add phone**, which shows a one-time QR code and 8 digits for the new phone; a phone's page renames it, makes it the admin, or revokes it. Buttons lists the device's buttons and whether it has a code for each, with **Add button** while there are fewer than eight. A button's page sets its name and icon (**Save**), learns its code (tap **Learn code**, then hold the button on the remote close to the device, within 15 seconds; the receiver must be wired), clears the code, or deletes the button with its code. A new button is saved first, then learned. Every paired phone sees the same buttons. Forget device frees this phone's slot on the device first (see [Phones and roles](#phones-and-roles)).
 
 The app follows the phone's language: Vietnamese on a Vietnamese phone, English otherwise. On Android 13 and newer it can also be set for this app alone in the system's app language setting.
 
@@ -181,7 +192,7 @@ Every board makes its own pairing QR code. The source code contains no secrets, 
    - Open [`tools/qr-viewer.html`](tools/qr-viewer.html) in Chrome or Edge, click **Connect** and pick the board. The page reads the code over USB (Web Serial) and shows it large enough to scan, with **Print** and **Save PNG** buttons. It works offline, sends nothing anywhere, and is available in English and Vietnamese. In other browsers, paste the serial output into the box at the bottom of the page.
    - Or open a serial monitor (`pio device monitor`) and type `qr`. Until a phone is paired, the code is also printed at every boot.
 3. **Keep the code private.** Print it or save the PNG somewhere safe, not on the box by the door. Anyone with it can pair while pairing is open. Do not share your QR code, screenshots of it, or your serial logs when you share the project.
-4. **Pair the first phone** by scanning the code in the app. It becomes the admin. To add more phones later, the admin taps "Add phone" (or you hold BOOT for 3 seconds) and the new phone scans the same code within 60 seconds.
+4. **Pair the first phone** by scanning the code in the app. It becomes the admin. To add more phones later, the admin opens Settings, **Phones**, **Add phone**: its screen shows a QR code and 8 digits, and the new phone scans the code or taps **Enter a code** and types the digits, within 5 minutes. No computer is needed. Holding BOOT for 3 seconds still lets a new phone pair with the device's own code for 60 seconds.
 
 Erasing the phone keys (hold KEY / GPIO14 for 10 seconds) keeps the setup secret, so the printed code stays valid. Only a full flash erase (`pio run -t erase`) creates a new secret and a new code.
 
@@ -204,7 +215,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, power status in the app
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
 - [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, buttons the admin can add, edit and delete (up to eight), fit battery and mains detection
-- [ ] **Phase 7 – More phones:** admin UI to add, rename and revoke phones; a phone that forgets the device leaves and frees its slot
+- [x] **Phase 7 – More phones:** admin UI to add (8-digit invite), rename, revoke and hand over admin; a phone that forgets the device leaves and frees its slot; up to three phones connected at once
 
 ## Security notes
 

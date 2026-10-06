@@ -112,7 +112,7 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 | 4 | Hoàn thiện: dưới 1 giây từ lúc mở đến sẵn sàng, xử lý mất kết nối, trạng thái nguồn | Chưa |
 | 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
 | 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, lắp pin và mạch phát hiện điện lưới | Đang làm |
-| 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Chưa |
+| 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Xong |
 
 Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh). Giai đoạn 4 và 6 chưa xong.
 
@@ -155,8 +155,13 @@ Giai đoạn 6, nút tùy chỉnh (firmware ở nhánh `esp32`, app ở nhánh `
 
 Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), mạch phát hiện điện lưới và đo pin.
 
-Giai đoạn 7, lỗ hổng cần sửa: "Quên thiết bị" hiện chỉ xóa khóa trên điện thoại, ô khóa vẫn nằm trong bảng của board. Lệnh `07` không cho admin tự thu hồi mình, nên admin quên thiết bị thì board không còn ai có quyền admin, và muốn lấy lại phải giữ KEY 10 giây, xóa sạch khóa của mọi máy. Cách sửa: khi quên thiết bị, app gửi lệnh mới nhờ board xóa ô của chính nó. Những điểm cần quyết khi thiết kế:
+Giai đoạn 7, xong (firmware ở nhánh `esp32`, app ở nhánh `android`):
 
-- Lệnh mới (dự kiến `08`, Rời board): máy nào cũng gửi được, ký bằng khóa của chính nó. Board xóa ô của máy gửi, không nhận key id, nên máy thường không xóa được ô của máy khác.
-- Admin rời đi: nếu còn máy khác thì hoặc bắt admin chuyển quyền trước, hoặc board tự nâng máy cũ nhất lên admin. Nếu admin là máy cuối cùng thì board mở lại ghép đôi.
-- Không kết nối được board lúc quên: app báo ô khóa sẽ còn trên board rồi vẫn cho quên trên máy. Với admin thì chặn hoặc cảnh báo mạnh hơn.
+- Lệnh mới: `08` Rời board (máy nào cũng gửi được, board xóa ô của chính máy gửi, không nhận key id), `0E` Xem danh sách máy (máy nào cũng gửi được), `0F` Đổi tên máy `[key id][tên 0–32 byte]` (admin đổi mọi máy, máy thường chỉ đổi tên chính nó), `10` Chuyển quyền admin `[key id]` (admin cũ thành máy thường). Characteristic mới `PHONES` (`…0008`, chỉ đọc): rỗng cho tới khi kết nối đó gửi `0E`; kết nối khác đọc ra rỗng.
+- Tên máy lưu trong NVS cùng namespace `keys`, key `n0`–`n7`, không đổi blob `Slot` nên các máy đã ghép đôi giữ nguyên khóa. Ghép đôi xong, app gửi `0F` đặt tên theo tên thiết bị trong Cài đặt Android. Máy chưa có tên thì app hiện "Điện thoại <số ô + 1>".
+- Admin rời đi khi còn máy khác thì board trả `04`, app báo phải đặt máy khác làm quản trị viên trước. Admin là máy cuối thì rời được, board mở lại ghép đôi. Không kết nối được board lúc quên: máy thường được quên (ô còn trên board cho tới khi admin thu hồi), admin bị chặn.
+- `0E` cho mọi máy chứ không chỉ admin, vì máy được chuyển quyền cần biết vai trò mới: app đọc danh sách mỗi lần mở Cài đặt và cập nhật vai trò lưu trong DataStore.
+- Nhiều kết nối cùng lúc (tối đa 3, `config::kMaxConnections`): trước đây board chỉ nhận một kết nối và ngừng quảng bá, nên một người mở app thì người khác thấy "Ngoài vùng". Giờ board quảng bá lại trong `onConnect` khi còn chỗ. Mỗi kết nối có nonce CHALLENGE riêng (đọc qua `onRead`, notify riêng cho kết nối đó), nhận `STATUS` của lệnh do chính nó gửi, và đọc `PAIRING`, `PHONES` của riêng nó; `INFO` notify cho tất cả. Đọc dài (`PAIRING`, `PHONES`) chỉ gọi `onRead` ở lượt đầu, nên hai máy đọc cùng lúc có thể lẫn giá trị; hiếm, và app kiểm tra rồi đọc lại. Chỉ giữ một ô chờ xác nhận lúc ghép đôi: hai máy ghép đôi cùng lúc thì máy trước bị bỏ.
+- Mã mời thay cho việc lấy mã QR qua máy tính: lệnh `11` (admin), board tạo 8 số ngẫu nhiên dùng một lần trong 5 phút (mã mới thay mã cũ, dùng xong hay ghép đôi xong thì hủy). Khóa ghép đôi là `HMAC-SHA256(key = 8 số dạng ASCII, "RDINVITE")` lấy 16 byte đầu, thay cho setup secret, phần còn lại của ghép đôi giữ nguyên. Admin đọc `PAIRING` ngay sau lệnh: `[02][salt 16][8 số XOR HMAC(khóa admin, "RDINVITE" ‖ salt)]`, nên 8 số không đi qua sóng ở dạng rõ. Máy admin hiện mã QR (dạng `RDOOR1:<MAC>:<khóa>`, vẽ bằng ZXing core) và 8 số; máy mới quét hoặc chọn Nhập mã rồi gõ 8 số. Gõ số thì app không có MAC, nên tìm board đang quảng bá cờ ghép đôi. Đóng trang mã thì app đọc lại danh sách, nên thấy ngay máy vừa ghép đôi. Mã QR gốc của board vẫn dùng được (máy đầu tiên, giữ BOOT 3 giây).
+- Trong app: Cài đặt, Điện thoại (thay dòng Thêm điện thoại cũ): danh sách máy (nhãn Quản trị viên, Máy này) và Thêm điện thoại (hiện mã mời); trang của từng máy có tên và Lưu, với máy khác thì thêm Đặt làm quản trị viên và Thu hồi (đều có bước xác nhận). Quên thiết bị gửi `08` trước rồi mới xóa khóa trên máy.
+- Đã chạy thử trên tablet với board và một điện thoại thứ hai: danh sách máy, đổi tên, mã mời (máy thứ hai ghép đôi được và tự đặt tên theo máy), hai máy cùng kết nối, chuyển quyền, thu hồi, quên thiết bị.

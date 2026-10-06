@@ -62,6 +62,17 @@ class SetupCodeTest {
         // Every byte value round-trips through the encoder in device_secret.cpp.
         val data = ByteArray(256) { it.toByte() }
         assertArrayEquals(data, Base32.decode(encode(data)))
+        assertEquals(encode(data), Base32.encode(data))
+    }
+
+    @Test
+    fun formatsWhatParseReads() {
+        // Fake MAC and secret, as in the invite QR code the admin phone shows.
+        val code = SetupCode("00:11:22:33:44:55", ByteArray(16) { it.toByte() })
+        assertEquals("RDOOR1:001122334455:AAAQEAYEAUDAOCAJBIFQYDIOB4", code.format())
+        val parsed = SetupCode.parse(code.format())
+        assertEquals(code.mac, parsed?.mac)
+        assertArrayEquals(code.secret, parsed?.secret)
     }
 
     // Port of base32() in device_secret.cpp.

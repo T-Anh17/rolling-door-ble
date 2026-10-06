@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by rootViewModel.state.collectAsStateWithLifecycle()
             RollingDoorTheme {
-                RootScreen(state, adapter, onForget = rootViewModel::forget)
+                RootScreen(state, adapter)
             }
         }
     }
