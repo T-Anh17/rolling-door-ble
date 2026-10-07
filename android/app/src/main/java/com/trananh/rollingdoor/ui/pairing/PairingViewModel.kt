@@ -94,6 +94,12 @@ class PairingViewModel(private val newSession: () -> PairingSession) : ViewModel
         _state.value = PairingUiState.Idle
     }
 
+    // The view model belongs to the activity and outlives the screen: after Forget device the
+    // screen comes back with the last pairing's Done, so start over from scan or type.
+    fun onShown() {
+        if (_state.value == PairingUiState.Done) reset()
+    }
+
     // "Scan another code": back to the start, forgetting the current code.
     fun reset() {
         cancel()
