@@ -118,7 +118,7 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 | 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Xong |
 | 9 | Tầm xa BLE: phát +20 dBm | Xong |
 
-Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh), `v0.0.2` (giai đoạn 7), `v0.0.3` (xong giai đoạn 6: đo pin, nhắc học lệnh). Giai đoạn 4 và 5 chưa xong.
+Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh), `v0.0.2` (giai đoạn 7), `v0.0.3` (xong giai đoạn 6: đo pin, nhắc học lệnh), `v0.0.4` (xong giai đoạn 9: phát +20 dBm; bản release ký bằng khóa riêng; lệnh serial `keys admin/revoke`). Giai đoạn 4 và 5 chưa xong.
 
 Giai đoạn 3 gồm: giao thức và crypto ghép đôi (có unit test), lưu khóa trong Android Keystore, GATT client và tự kết nối lại, màn hình ghép đôi, máy quét QR offline, gate quyền Bluetooth, design tokens và components, icon app, màn hình điều khiển (trạng thái và bốn nút, không cuộn) và sheet Cài đặt (thông tin thiết bị, Thêm điện thoại cho admin, Quên thiết bị). Đã chạy thử trên máy thật với board: bốn lệnh tới board và trả `0x00`, Thêm điện thoại mở ghép đôi, ẩn app thì ngắt kết nối, mở lại thì tự kết nối.
 
