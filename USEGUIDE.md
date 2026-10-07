@@ -111,10 +111,10 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 | 3 | App Android: ghép đôi, màn hình bốn nút, tự kết nối | Xong |
 | 4 | Hoàn thiện: dưới 1 giây từ lúc mở đến sẵn sàng, xử lý mất kết nối, trạng thái nguồn | Chưa |
 | 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
-| 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, đo pin dự phòng | Đang làm |
+| 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, đo pin dự phòng | Xong |
 | 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Xong |
 
-Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh). Giai đoạn 4 và 6 chưa xong.
+Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh), `v0.0.2` (giai đoạn 7), `v0.0.3` (xong giai đoạn 6: đo pin, nhắc học lệnh). Giai đoạn 4 và 5 chưa xong.
 
 Giai đoạn 3 gồm: giao thức và crypto ghép đôi (có unit test), lưu khóa trong Android Keystore, GATT client và tự kết nối lại, màn hình ghép đôi, máy quét QR offline, gate quyền Bluetooth, design tokens và components, icon app, màn hình điều khiển (trạng thái và bốn nút, không cuộn) và sheet Cài đặt (thông tin thiết bị, Thêm điện thoại cho admin, Quên thiết bị). Đã chạy thử trên máy thật với board: bốn lệnh tới board và trả `0x00`, Thêm điện thoại mở ghép đôi, ẩn app thì ngắt kết nối, mở lại thì tự kết nối.
 
@@ -165,7 +165,7 @@ Giai đoạn 6, pin: bỏ phát hiện điện lưới (không nối thêm dây)
 
 Giai đoạn 6, nhắc học lệnh: board mới chưa có mã nào nên các nút mờ mà không nói lý do. Màn điều khiển giờ ghi dưới dòng trạng thái: chưa học nút nào thì "Chưa học lệnh từ remote nên các nút chưa dùng được." (máy thường thêm "Nhờ quản trị viên học lệnh."), học một phần thì "Nút mờ là nút chưa học lệnh."; máy quản trị viên có link Học lệnh mở thẳng trang Nút điều khiển. Đã thử trên tablet.
 
-Giai đoạn 6, còn lại: thử phát ở cửa thật (đã phát được, chưa kiểm tra cửa có nhận không), kiểm tra phần trăm pin lúc chạy pin.
+Giai đoạn 6, đã thử xong: cửa thật nhận lệnh từ board, phần trăm pin đúng lúc chạy pin.
 
 Giai đoạn 7, xong (firmware ở nhánh `esp32`, app ở nhánh `android`):
 
