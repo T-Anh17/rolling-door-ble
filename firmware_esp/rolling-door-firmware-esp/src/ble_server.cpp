@@ -37,8 +37,6 @@ struct Peer {
 Peer peers[config::kMaxConnections];
 portMUX_TYPE peersLock = portMUX_INITIALIZER_UNLOCKED;
 
-void startAdvertising();
-
 // Call with peersLock held.
 Peer* findPeer(uint16_t handle) {
   for (Peer& peer : peers) {
@@ -96,22 +94,20 @@ class ServerCallbacks : public NimBLEServerCallbacks {
   // discovery instead of before it, and discovery then needs fewer requests (one characteristic
   // with a 128-bit UUID per response at the default MTU).
   //
-  // The set a phone connects through stops; both start again while there is room for another
-  // phone, and both stop once the board is full (startAdvertising() checks).
+  // Advertising stops when a phone connects; it starts again while there is room for another.
   void onConnect(NimBLEServer* server, NimBLEConnInfo& connInfo) override {
     const int rc = ble_gattc_exchange_mtu(connInfo.getConnHandle(), nullptr, nullptr);
     if (rc != 0) {
       Serial.printf("[BLE] MTU exchange not started, rc %d\n", rc);
     }
     addPeer(connInfo.getConnHandle());
-    startAdvertising();
-    uint8_t txPhy = 0;
-    uint8_t rxPhy = 0;
-    server->getPhy(connInfo.getConnHandle(), &txPhy, &rxPhy);
-    Serial.printf("[BLE] connected %s on %s PHY, interval %.2fms, %u/%u connection(s)\n",
-                  connInfo.getAddress().toString().c_str(), rxPhy == BLE_HCI_LE_PHY_CODED ? "Coded" : (rxPhy == BLE_HCI_LE_PHY_2M ? "2M" : "1M"),
-                  connInfo.getConnInterval() * 1.25f, server->getConnectedCount(),
-                  static_cast<unsigned>(config::kMaxConnections));
+    const uint8_t connected = server->getConnectedCount();
+    if (connected < config::kMaxConnections) {
+      NimBLEDevice::startAdvertising();
+    }
+    Serial.printf("[BLE] connected %s, interval %.2fms, %u/%u connection(s)\n",
+                  connInfo.getAddress().toString().c_str(), connInfo.getConnInterval() * 1.25f,
+                  connected, static_cast<unsigned>(config::kMaxConnections));
     post(Event::Type::Connected, connInfo.getConnHandle());
   }
 
@@ -123,12 +119,7 @@ class ServerCallbacks : public NimBLEServerCallbacks {
     Serial.printf("[BLE] disconnected %s, reason 0x%X, advertising again\n",
                   connInfo.getAddress().toString().c_str(), reason);
     removePeer(connInfo.getConnHandle());
-    startAdvertising();  // extended advertising has no advertiseOnDisconnect()
     post(Event::Type::Disconnected, connInfo.getConnHandle());
-  }
-
-  void onPhyUpdate(NimBLEConnInfo& connInfo, uint8_t txPhy, uint8_t rxPhy) override {
-    Serial.printf("[BLE] %s now on %s PHY\n", connInfo.getAddress().toString().c_str(), rxPhy == BLE_HCI_LE_PHY_CODED ? "Coded" : (rxPhy == BLE_HCI_LE_PHY_2M ? "2M" : "1M"));
   }
 
   void onMTUChange(uint16_t mtu, NimBLEConnInfo&) override {
@@ -202,70 +193,20 @@ class PerPeerReadCallbacks : public NimBLECharacteristicCallbacks {
   Kind kind;
 };
 
-// Two sets, both connectable at the board's own address, so a phone connects by the saved MAC
-// either way:
-//   legacy, 1M PHY: every phone sees it, and the app scans for it while pairing. The service
-//   UUID in the advertisement, the pairing flag in the scan response.
-//   long range, LE Coded PHY (S8): phones that support it hear the board from about twice as
-//   far. An extended advertisement cannot be both connectable and scannable, so the pairing flag
-//   rides in the advertisement itself.
-void addPairingFlag(NimBLEExtAdvertisement& data) {
-  const uint8_t flag[] = {config::kManufacturerId & 0xFF, config::kManufacturerId >> 8, 0x01};
-  data.setManufacturerData(flag, sizeof(flag));
-}
-
-// The sets must not be advertising while they are set up.
-bool configureAdvertising(bool pairingOpen) {
-  NimBLEExtAdvertising* advertising = NimBLEDevice::getAdvertising();
-
-  NimBLEExtAdvertisement legacy(BLE_HCI_LE_PHY_1M, BLE_HCI_LE_PHY_1M);
-  legacy.setLegacyAdvertising(true);
-  legacy.setConnectable(true);
-  legacy.setScannable(true);
-  legacy.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
-  legacy.addServiceUUID(config::kServiceUuid);
-  legacy.setMinInterval(config::kAdvMinInterval);
-  legacy.setMaxInterval(config::kAdvMaxInterval);
-
-  // Never empty: TX power always, the pairing flag while pairing is open.
-  NimBLEExtAdvertisement response(BLE_HCI_LE_PHY_1M, BLE_HCI_LE_PHY_1M);
-  response.addTxPower();
+void applyScanResponse(bool pairingOpen) {
+  NimBLEAdvertisementData scanResponse;
   if (pairingOpen) {
-    addPairingFlag(response);
+    const uint8_t data[] = {config::kManufacturerId & 0xFF, config::kManufacturerId >> 8, 0x01};
+    scanResponse.setManufacturerData(data, sizeof(data));
   }
-
-  NimBLEExtAdvertisement coded(BLE_HCI_LE_PHY_CODED, BLE_HCI_LE_PHY_CODED);
-  coded.setConnectable(true);
-  coded.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
-  coded.addServiceUUID(config::kServiceUuid);
-  if (pairingOpen) {
-    addPairingFlag(coded);
-  }
-  coded.setMinInterval(config::kCodedAdvMinInterval);
-  coded.setMaxInterval(config::kCodedAdvMaxInterval);
-
-  const bool ok = advertising->setInstanceData(config::kLegacyAdvInstance, legacy) &&
-                  advertising->setScanResponseData(config::kLegacyAdvInstance, response) &&
-                  advertising->setInstanceData(config::kCodedAdvInstance, coded);
-  if (!ok) {
-    Serial.println("[BLE] advertising sets not configured");
-  }
-  return ok;
-}
-
-// Both sets while the board has room for another phone, neither once it is full. Safe to call
-// with the sets already running.
-void startAdvertising() {
-  NimBLEExtAdvertising* advertising = NimBLEDevice::getAdvertising();
-  if (server->getConnectedCount() >= config::kMaxConnections) {
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  const bool wasAdvertising = advertising->isAdvertising();
+  if (wasAdvertising) {
     advertising->stop();
-    return;
   }
-  if (!advertising->start(config::kLegacyAdvInstance)) {
-    Serial.println("[BLE] legacy advertising not started");
-  }
-  if (!advertising->start(config::kCodedAdvInstance)) {
-    Serial.println("[BLE] long-range advertising not started");
+  advertising->setScanResponseData(scanResponse);
+  if (wasAdvertising) {
+    advertising->start();
   }
 }
 
@@ -294,13 +235,13 @@ void begin() {
   // No device name, in advertising or in the GAP Device Name characteristic,
   // so a scan does not reveal what the board controls.
   NimBLEDevice::init("");
-  // Before the advertising sets are built: each set takes the power set here.
   if (!NimBLEDevice::setPower(config::kBleTxPowerDbm)) {
     Serial.println("[BLE] TX power not set");
   }
 
   server = NimBLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
+  server->advertiseOnDisconnect(true);
 
   NimBLEService* service = server->createService(config::kServiceUuid);
 
@@ -337,11 +278,18 @@ void begin() {
 
   server->start();
 
-  configureAdvertising(false);
-  startAdvertising();
+  // Service UUID goes in the advertising packet so the app can scan by it;
+  // the pairing flag goes in the scan response.
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  advertising->addServiceUUID(config::kServiceUuid);
+  advertising->enableScanResponse(true);
+  advertising->setMinInterval(config::kAdvMinInterval);
+  advertising->setMaxInterval(config::kAdvMaxInterval);
+  applyScanResponse(false);
+  advertising->start();
 
-  Serial.printf("[BLE] advertising on 1M and Coded PHY at %d dBm, address %s\n",
-                NimBLEDevice::getPower(), NimBLEDevice::getAddress().toString().c_str());
+  Serial.printf("[BLE] advertising at %d dBm, address %s\n", NimBLEDevice::getPower(),
+                NimBLEDevice::getAddress().toString().c_str());
 }
 
 bool nextEvent(Event& out) {
@@ -395,9 +343,7 @@ void setPairingResponse(uint16_t connHandle, const uint8_t* data, size_t length)
 }
 
 void setPairingAdvertised(bool open) {
-  NimBLEDevice::getAdvertising()->stop();
-  configureAdvertising(open);
-  startAdvertising();
+  applyScanResponse(open);
 }
 
 void disconnect(uint16_t connHandle) {
