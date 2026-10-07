@@ -175,6 +175,17 @@ gradlew installDebug
 
 In PowerShell on Windows, use `.\gradlew.bat installDebug`. Unit tests run with `gradlew testDebugUnitTest`.
 
+For everyday use, build a signed release APK with `gradlew assembleRelease` (output: `app/build/outputs/apk/release/app-release.apk`). Signing reads `android/keystore.properties`, which is gitignored and points to your own key store outside the repository:
+
+```
+storeFile=C:/path/outside/the/repo/release.jks
+storePassword=...
+keyAlias=rollingdoor
+keyPassword=...
+```
+
+Without that file the release APK is unsigned. Sign every update with the same key: a phone moving from a debug build to a release build (or to a different key) must uninstall the app first, which deletes its phone key, so it has to pair again.
+
 BLE does not work in the emulator; use a real device.
 
 The app declares both sets of Bluetooth permissions. On Android 11 and older, scanning for the device during pairing needs the location permission and location turned on; Android 12 and newer use the dedicated Bluetooth permissions instead.

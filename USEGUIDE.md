@@ -81,7 +81,10 @@ cd android
 .\gradlew.bat assembleDebug        # build APK debug
 .\gradlew.bat installDebug         # build và cài lên điện thoại đang cắm
 .\gradlew.bat testDebugUnitTest    # chạy unit test
+.\gradlew.bat assembleRelease      # APK để dùng hằng ngày: app\build\outputs\apk\release\app-release.apk
 ```
+
+Bản release được ký bằng khóa trong `android/keystore.properties` (đã ignore), file này trỏ tới khóa nằm ngoài repo. Không có file này thì bản release ra chưa ký, không cài được. Mọi bản cập nhật phải ký bằng cùng một khóa, mất khóa thì mỗi máy phải gỡ app và ghép đôi lại. Bản debug và bản release ký khác khóa, nên đổi từ bản này sang bản kia cũng phải gỡ app trước.
 
 ## Cách làm việc
 
