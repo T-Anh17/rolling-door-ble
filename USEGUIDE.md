@@ -116,6 +116,7 @@ Repo này để Public. Các quy tắc sau bắt buộc cho mọi thay đổi:
 | 5 | OTA qua WiFi do admin bật, từ chối khi chạy pin | Chưa |
 | 6 | RF thật và nguồn: học mã từ remote, phát bằng `rc-switch`, đo pin dự phòng | Xong |
 | 7 | Nhiều điện thoại: giao diện admin thêm, đổi tên, thu hồi | Xong |
+| 9 | Tầm xa BLE: phát +20 dBm | Xong |
 
 Bản phát hành: `v0.0.1` (giai đoạn 1–3, RF thật học từ app, nút tùy chỉnh), `v0.0.2` (giai đoạn 7), `v0.0.3` (xong giai đoạn 6: đo pin, nhắc học lệnh). Giai đoạn 4 và 5 chưa xong.
 
@@ -177,3 +178,10 @@ Giai đoạn 7, xong (firmware ở nhánh `esp32`, app ở nhánh `android`):
 - Mã mời thay cho việc lấy mã QR qua máy tính: lệnh `11` (admin), board tạo 8 số ngẫu nhiên dùng một lần trong 5 phút (mã mới thay mã cũ, dùng xong hay ghép đôi xong thì hủy). Khóa ghép đôi là `HMAC-SHA256(key = 8 số dạng ASCII, "RDINVITE")` lấy 16 byte đầu, thay cho setup secret, phần còn lại của ghép đôi giữ nguyên. Admin đọc `PAIRING` ngay sau lệnh: `[02][salt 16][8 số XOR HMAC(khóa admin, "RDINVITE" ‖ salt)]`, nên 8 số không đi qua sóng ở dạng rõ. Máy admin hiện mã QR (dạng `RDOOR1:<MAC>:<khóa>`, vẽ bằng ZXing core) và 8 số; máy mới quét hoặc chọn Nhập mã rồi gõ 8 số. Gõ số thì app không có MAC, nên tìm board đang quảng bá cờ ghép đôi. Đóng trang mã thì app đọc lại danh sách, nên thấy ngay máy vừa ghép đôi. Mã QR gốc của board vẫn dùng được (máy đầu tiên, giữ BOOT 3 giây).
 - Trong app: Cài đặt, Điện thoại (thay dòng Thêm điện thoại cũ): danh sách máy (nhãn Quản trị viên, Máy này) và Thêm điện thoại (hiện mã mời); trang của từng máy có tên và Lưu, với máy khác thì thêm Đặt làm quản trị viên và Thu hồi (đều có bước xác nhận). Quên thiết bị gửi `08` trước rồi mới xóa khóa trên máy.
 - Đã chạy thử trên tablet với board và một điện thoại thứ hai: danh sách máy, đổi tên, mã mời (máy thứ hai ghép đôi được và tự đặt tên theo máy), hai máy cùng kết nối, chuyển quyền, thu hồi, quên thiết bị.
+
+Giai đoạn 9, xong (firmware ở nhánh `esp32`):
+
+- Board phát +20 dBm (`config::kBleTxPowerDbm`, mặc định của ESP32-S3 là +9 dBm), áp cho quảng bá và kết nối. Board cắm điện, có pin 3700 mAh dự phòng, nên ưu tiên tầm xa hơn dòng tiêu thụ. BLE là hai chiều, chiều điện thoại gửi tới board vẫn theo công suất của điện thoại, nên tầm xa tăng ít hơn mức 11 dB.
+- Đã thử thêm quảng bá thứ hai trên LE Coded PHY (BLE 5 tầm xa, app kết nối bằng 1M + Coded): firmware chạy được, vivo có hỗ trợ, nhưng bỏ vì +20 dBm là đủ dùng. Nếu cần lại: `CONFIG_BT_NIMBLE_EXT_ADV` với 2 bộ quảng bá (bộ Coded không scannable nên cờ ghép đôi nằm trong gói quảng bá), tự gọi lại quảng bá trong `onDisconnect` vì chế độ mở rộng không có `advertiseOnDisconnect`, và app phải tự thử kết nối trực tiếp khi ngoài vùng vì autoConnect chỉ chờ trên 1M (commit `c1038f2` trên nhánh `esp32`, `7cae8aa` trên nhánh `android`).
+- Lệnh serial `keys admin <ô>` và `keys revoke <ô>` (cần cáp USB nên an toàn như `wipe`): gỡ app trên máy quản trị mà chưa bấm Quên thiết bị thì board vẫn giữ ô quản trị cũ, ghép đôi lại chỉ được máy thường. Lúc chuyển vivo sang bản release đã gặp đúng chuyện này và sửa bằng `keys admin 2` rồi `keys revoke 0`. `revoke` từ chối ô quản trị, để board không bao giờ hết quản trị viên.
+- Đã nạp firmware: log khởi động báo quảng bá ở 20 dBm.

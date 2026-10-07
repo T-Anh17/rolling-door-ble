@@ -235,6 +235,9 @@ void begin() {
   // No device name, in advertising or in the GAP Device Name characteristic,
   // so a scan does not reveal what the board controls.
   NimBLEDevice::init("");
+  if (!NimBLEDevice::setPower(config::kBleTxPowerDbm)) {
+    Serial.println("[BLE] TX power not set");
+  }
 
   server = NimBLEDevice::createServer();
   server->setCallbacks(new ServerCallbacks());
@@ -285,7 +288,8 @@ void begin() {
   applyScanResponse(false);
   advertising->start();
 
-  Serial.printf("[BLE] advertising, address %s\n", NimBLEDevice::getAddress().toString().c_str());
+  Serial.printf("[BLE] advertising at %d dBm, address %s\n", NimBLEDevice::getPower(),
+                NimBLEDevice::getAddress().toString().c_str());
 }
 
 bool nextEvent(Event& out) {

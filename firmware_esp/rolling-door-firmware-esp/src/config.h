@@ -15,6 +15,10 @@ constexpr const char* kPairingUuid   = "a7930006-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kButtonsUuid   = "a7930007-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kPhonesUuid    = "a7930008-966e-4240-b881-5c2e2f2203a8";
 
+// Radio power for advertising and connections: the ESP32-S3 maximum (default +9 dBm). The
+// board runs on USB with a 3700 mAh backup cell, so range matters more than current.
+constexpr int8_t kBleTxPowerDbm = 20;
+
 // Advertising interval in units of 0.625ms: 32 = 20ms, 48 = 30ms. Short, so a phone that
 // connects directly finds the board within one or two of its scan windows. Costs more power,
 // which only matters on battery (phase 6 can lengthen it there).
