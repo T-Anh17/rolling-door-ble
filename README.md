@@ -6,7 +6,7 @@ An ESP32-S3 sits near the door and replays the fixed codes of the original RF re
 
 The remote has no Stop button. Pressing Lock while the door is moving stops it, and Unlock must then be pressed before Up or Down works again. The app keeps exactly this behaviour.
 
-> **Status:** phases 1–3 and 7 done. The firmware pairs phones by QR code or by an 8-digit invite from the admin phone, and authenticates every command; up to three phones can be connected at once, and the admin renames, revokes and hands over admin from the app. The app pairs by scanning the QR code or typing the invite, connects on its own while it is open and controls the door from a screen of up to eight buttons. Real RF is in progress (phase 6): the admin adds, edits and deletes buttons and learns their codes from the original remote, and the board replays them with `rc-switch`. Phase 4 in progress: the app shows a power outage from `INFO` (fake values until mains detection is fitted); next is under 1 second from launch to ready. See [Roadmap](#roadmap).
+> **Status:** phases 1–3, 6 and 7 done. The firmware pairs phones by QR code or by an 8-digit invite from the admin phone, and authenticates every command; up to three phones can be connected at once, and the admin renames, revokes and hands over admin from the app. The app pairs by scanning the QR code or typing the invite, connects on its own while it is open and controls the door from a screen of up to eight buttons. The admin adds, edits and deletes buttons and learns their codes from the original remote; the board replays them with `rc-switch` and reports the backup battery level. Phase 4 in progress: next is under 1 second from launch to ready. See [Roadmap](#roadmap).
 
 > **Use this project only on your own door.** The original remote uses a fixed code, which is weak by design: anyone nearby with a cheap receiver can record it and replay it. This project does not fix that, and it is not a tool for opening doors that are not yours. See [Security notes](#security-notes).
 
@@ -214,7 +214,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [x] **Phase 3 – Android app:** pairing screen, four-button main screen, auto-connect on launch
 - [ ] **Phase 4 – Polish:** under 1 second from launch to ready, reconnect handling, battery level in the app
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
-- [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, buttons the admin can add, edit and delete (up to eight), measure the backup battery
+- [x] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, buttons the admin can add, edit and delete (up to eight), measure the backup battery
 - [x] **Phase 7 – More phones:** admin UI to add (8-digit invite), rename, revoke and hand over admin; a phone that forgets the device leaves and frees its slot; up to three phones connected at once
 
 ## Security notes
