@@ -52,7 +52,8 @@ sealed interface ConnectionState {
 //   start / link dropped -> Connecting (direct, 4 s) -> Ready
 //                                  | fails
 //                                  v
-//                           WaitingInRange (autoConnect = true, no timeout) -> Ready
+//                           WaitingInRange (autoConnect = true, no timeout; with Coded PHY,
+//                                           direct 30 s attempts on 1M + Coded) -> Ready
 //
 // Connects by the saved MAC without scanning. The board takes a few phones at once and keeps
 // advertising while it has room; disconnecting in stop() still frees a place for another phone.
@@ -130,6 +131,7 @@ class DoorConnection(
         started = true
         startedAt = SystemClock.elapsedRealtime()
         startedAfterProcess = startedAt - Process.getStartElapsedRealtime()
+        Log.i(RANGE_TAG, "LE Coded PHY ${if (GattClient.supportsCodedPhy(context)) "supported" else "not supported"}")
         // Registered in code and only while started: nothing wakes the app when it is closed.
         ContextCompat.registerReceiver(
             context,
@@ -233,7 +235,7 @@ class DoorConnection(
                     if (e.error !in OUT_OF_RANGE_ERRORS) throw e
                     _state.value = ConnectionState.WaitingInRange
                     waited = true
-                    open(autoConnect = true, timeoutMs = null)
+                    waitInRange()
                 }
                 try {
                     link = opened
@@ -314,6 +316,20 @@ class DoorConnection(
         )
     }
 
+    // autoConnect waits on 1M PHY only, so it never reaches a board that only the long-range
+    // (Coded PHY) advertising set gets to. A phone with Coded PHY keeps trying direct connects on
+    // both instead; each attempt scans until Android gives up (~30 s) or the board answers.
+    private suspend fun waitInRange(): DoorLink {
+        if (!GattClient.supportsCodedPhy(context)) return open(autoConnect = true, timeoutMs = null)
+        while (true) {
+            try {
+                return open(autoConnect = false, timeoutMs = LONG_RANGE_ATTEMPT_MS)
+            } catch (e: BleException) {
+                if (e.error !in OUT_OF_RANGE_ERRORS) throw e
+            }
+        }
+    }
+
     private suspend fun open(autoConnect: Boolean, timeoutMs: Long?): DoorLink {
         val opening = DoorLink(context, adapter.getRemoteDevice(device.mac))
         try {
@@ -327,10 +343,12 @@ class DoorConnection(
 
     private companion object {
         const val DIRECT_TIMEOUT_MS = 4_000L
+        const val LONG_RANGE_ATTEMPT_MS = 30_000L
 
         // The board listens for 15 s; the margin covers the notify on a slow link.
         const val LEARN_TIMEOUT_MS = 20_000L
         const val TIMING_TAG = "DoorTiming"
+        const val RANGE_TAG = "DoorRange"
 
         // What a direct attempt reports when the device is out of range or restarting
         // (including status 133, which arrives as ConnectFailed).

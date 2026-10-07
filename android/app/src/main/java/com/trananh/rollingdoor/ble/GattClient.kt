@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
@@ -122,15 +123,23 @@ class GattClient(
     }
 
     // autoConnect = false: direct connection; Android only gives up after ~30 s, so pass a short timeout.
+    // On a phone with LE Coded PHY it initiates on 1M and Coded at once and takes whichever
+    // advertising set it hears: 1M near the board, Coded (long range) where only that reaches.
     // autoConnect = true: the controller waits for the device to advertise (allow list, low duty
-    // scan, no app scanning); pass timeoutMs = null to wait until it shows up or close() is called.
+    // scan, no app scanning, 1M only); pass timeoutMs = null to wait until it shows up or close()
+    // is called.
     suspend fun connect(autoConnect: Boolean, timeoutMs: Long?) {
         mutex.withLock {
             check(gatt == null && !closed) { "connect() called twice" }
             val result = CompletableDeferred<Any>()
             pending = Pending(Op.Connect, result)
             try {
-                gatt = device.connectGatt(context, autoConnect, callback, BluetoothDevice.TRANSPORT_LE)
+                val phy = if (supportsCodedPhy(context)) {
+                    BluetoothDevice.PHY_LE_1M_MASK or BluetoothDevice.PHY_LE_CODED_MASK
+                } else {
+                    BluetoothDevice.PHY_LE_1M_MASK
+                }
+                gatt = device.connectGatt(context, autoConnect, callback, BluetoothDevice.TRANSPORT_LE, phy)
                     ?: throw BleException(LinkError.ConnectFailed, "connectGatt returned null")
                 if (timeoutMs == null) {
                     result.await()
@@ -263,8 +272,12 @@ class GattClient(
         g?.close()
     }
 
-    private companion object {
-        val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-        const val OP_TIMEOUT_MS = 5_000L
+    companion object {
+        private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+        private const val OP_TIMEOUT_MS = 5_000L
+
+        // LE Coded PHY (Bluetooth 5 long range): the board advertises on it too.
+        fun supportsCodedPhy(context: Context): Boolean =
+            context.getSystemService(BluetoothManager::class.java)?.adapter?.isLeCodedPhySupported == true
     }
 }
