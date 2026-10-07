@@ -78,6 +78,8 @@ rolling-door-ble/
 
 One custom GATT service with seven characteristics. The device advertises no name, only the service UUID in the advertising packet. While pairing is open, the scan response also carries manufacturer data `FF FF 01`.
 
+For range, the device transmits at +20 dBm (the ESP32-S3 maximum) and runs two connectable advertising sets at the same address: a legacy one on the 1M PHY, which every phone sees, and an extended one on the LE Coded PHY (Bluetooth 5 long range), which carries the service UUID and, while pairing is open, the same `FF FF 01` in the advertisement itself. On a phone that supports Coded PHY the app connects on 1M and Coded at once and takes whichever set it hears: 1M near the device, Coded where only that one reaches. Out of range, it keeps trying direct connects on both instead of waiting on 1M only. Other phones connect on 1M as before.
+
 The device takes up to three phones at once and keeps advertising while it has room, so one phone with the app open does not lock the others out. Each connection has its own `CHALLENGE` nonce and gets the `STATUS` of its own commands; `PAIRING` and `PHONES` read differently per connection; `INFO` goes to all.
 
 | Characteristic | UUID | Properties | Payload |
@@ -159,7 +161,7 @@ Requires [PlatformIO](https://platformio.org/). From `firmware_esp/rolling-door-
 pio run -t upload && pio device monitor
 ```
 
-The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) `battery` (the cell's voltage and percent), `buttons` (list the buttons with icon and name) and `rf` (learn and test the remote's codes, see below).
+The board has no user LED, so use the serial log to check behaviour. The serial console accepts `qr` (print the pairing QR code), `keys` (list paired phones, without keys; `keys admin <slot>` makes a phone the admin and `keys revoke <slot>` removes one, for example when the admin phone's app was uninstalled without forgetting the device first), `pair` (open pairing for 60 seconds), `wipe` (erase all phone keys) `battery` (the cell's voltage and percent), `buttons` (list the buttons with icon and name) and `rf` (learn and test the remote's codes, see below).
 
 The admin phone learns the codes from Settings, **Buttons** (see [Android app](#android-app)). Over the serial console, type `rf learn 1` and hold the remote's Up button a few centimetres from the receiver; the code is saved once it is received twice in a row (15 s timeout, `rf cancel` stops early). Repeat for buttons `2`, `3` and `4` (Down, Lock, Unlock on a new board). Codes learned before buttons had ids are moved to buttons 1–4 on the first boot. `rf list` shows which buttons are learned (protocol, bit count and pulse length, never the code), `rf send <button>` transmits a code without the app, and `rf clear [button]` erases one or all codes. `rf verify` sends each learned code and decodes it with the board's own receiver, to check that the board transmits exactly the code of that remote button (it also warns if two buttons were learned with the same code). Two more commands check the hardware: `rf selftest` does the same with a made-up code, and `rf scan` logs the receiver's edge counts for 10 seconds while a remote button is pressed.
 
@@ -216,6 +218,7 @@ Merge `dev` into `main` when a phase works, then tag the release (`v0.1.0`, `v0.
 - [ ] **Phase 5 – OTA:** admin-triggered update mode over WiFi, refused while on battery
 - [ ] **Phase 6 – Real RF and power:** learn codes from the remote, transmit with `rc-switch`, buttons the admin can add, edit and delete (up to eight), measure the backup battery
 - [x] **Phase 7 – More phones:** admin UI to add (8-digit invite), rename, revoke and hand over admin; a phone that forgets the device leaves and frees its slot; up to three phones connected at once
+- [ ] **Phase 9 – BLE range:** +20 dBm and a second advertising set on the LE Coded PHY, which the app connects through on phones that support it
 
 ## Security notes
 

@@ -15,11 +15,24 @@ constexpr const char* kPairingUuid   = "a7930006-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kButtonsUuid   = "a7930007-966e-4240-b881-5c2e2f2203a8";
 constexpr const char* kPhonesUuid    = "a7930008-966e-4240-b881-5c2e2f2203a8";
 
+// Radio power for advertising and connections: the ESP32-S3 maximum (default +9 dBm). The
+// board runs on USB with a 3700 mAh backup cell, so range matters more than current.
+constexpr int8_t kBleTxPowerDbm = 20;
+
+// Two advertising sets, both connectable at the same address (see ble_server.cpp):
+// legacy on 1M PHY, which every phone sees, and long range on LE Coded PHY.
+constexpr uint8_t kLegacyAdvInstance = 0;
+constexpr uint8_t kCodedAdvInstance = 1;
+
 // Advertising interval in units of 0.625ms: 32 = 20ms, 48 = 30ms. Short, so a phone that
 // connects directly finds the board within one or two of its scan windows. Costs more power,
 // which only matters on battery (phase 6 can lengthen it there).
 constexpr uint16_t kAdvMinInterval = 32;
 constexpr uint16_t kAdvMaxInterval = 48;
+// A Coded PHY advertisement takes several ms of air per channel; 50-100ms is still quick for a
+// phone at the edge of range, which otherwise could not connect at all.
+constexpr uint16_t kCodedAdvMinInterval = 80;
+constexpr uint16_t kCodedAdvMaxInterval = 160;
 // Scan response manufacturer data while pairing is open: [company id 0xFFFF][0x01].
 constexpr uint16_t kManufacturerId = 0xFFFF;
 
