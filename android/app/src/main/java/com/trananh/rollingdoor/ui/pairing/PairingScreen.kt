@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,6 +56,7 @@ import com.trananh.rollingdoor.ui.theme.RollingDoorTheme
 
 @Composable
 fun PairingScreen(viewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory)) {
+    LaunchedEffect(viewModel) { viewModel.onShown() }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var scanning by rememberSaveable { mutableStateOf(false) }
